@@ -37,3 +37,21 @@ jobs:
 
       - name: Run pytest
         run: pytest tests/ -v --tb=short
+
+  comment:
+    needs: test
+    if: ${{ always() && github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Post sticky CI result comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: ci-result
+          message: |
+            ${{ needs.test.result == 'success' && '✅ **CI passed**' || (needs.test.result == 'failure' && '❌ **CI failed**' || format('⚠️ **CI {0}**', needs.test.result)) }}
+
+            - Commit: `${{ github.event.pull_request.head.sha }}`
+            - Run: [#${{ github.run_number }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - Matrix: Python 3.10 + 3.11 (alembic upgrade + pytest)
