@@ -1,5 +1,7 @@
 # Family Finance WhatsApp AI Assistant
 
+[![CI](https://github.com/lilianho0512-art/family_finance_whatsapp_ai/actions/workflows/ci.yml/badge.svg)](https://github.com/lilianho0512-art/family_finance_whatsapp_ai/actions/workflows/ci.yml)
+
 生产级 WhatsApp 家庭财务 AI 助理：
 - WhatsApp Cloud API 接入（GET 验证 + POST 接收）
 - send "Hi" 自动回复 自我介绍 + 功能目录
