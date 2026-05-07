@@ -50,6 +50,70 @@ async def verify_webhook(
     return PlainTextResponse(content="forbidden", status_code=403)
 
 
+@router.post("/webhook/greenapi")
+async def receive_greenapi(request: Request, db: Session = Depends(get_db)):
+    """Green API webhook — translates payload shape and reuses _handle_message."""
+    try:
+        body = await request.json()
+    except Exception as e:
+        logger.warning(f"greenapi webhook bad json: {e}")
+        return JSONResponse({"status": "ignored"}, status_code=200)
+
+    try:
+        if body.get("typeWebhook") != "incomingMessageReceived":
+            return JSONResponse({"status": "ignored"}, status_code=200)
+
+        chat_id = (body.get("senderData") or {}).get("chatId", "") or ""
+        # Skip group chats (chatId ends with @g.us)
+        if chat_id.endswith("@g.us"):
+            return JSONResponse({"status": "ignored"}, status_code=200)
+        from_number = chat_id.split("@", 1)[0]
+        msg_id = str(body.get("idMessage") or "")
+        md = body.get("messageData") or {}
+        type_msg = md.get("typeMessage") or ""
+
+        meta_msg = {"from": from_number, "id": msg_id}
+        if type_msg == "textMessage":
+            text = (md.get("textMessageData") or {}).get("textMessage", "")
+            meta_msg.update({"type": "text", "text": {"body": text}})
+        elif type_msg == "extendedTextMessage":
+            text = (md.get("extendedTextMessageData") or {}).get("text", "")
+            meta_msg.update({"type": "text", "text": {"body": text}})
+        elif type_msg in ("imageMessage", "documentMessage", "stickerMessage"):
+            fd = md.get("fileMessageData") or {}
+            url = fd.get("downloadUrl") or ""
+            caption = fd.get("caption") or ""
+            kind = "image" if type_msg == "imageMessage" else (
+                "document" if type_msg == "documentMessage" else "sticker"
+            )
+            meta_msg.update({"type": kind, kind: {"id": url, "caption": caption}})
+        else:
+            logger.info(f"greenapi unsupported typeMessage: {type_msg}")
+            return JSONResponse({"status": "ignored"}, status_code=200)
+
+        try:
+            _handle_message(db, meta_msg)
+        except Exception as inner:
+            tb = traceback.format_exc()
+            logger.error(f"_handle_message (greenapi) error: {inner}\n{tb}")
+            log_bug(
+                "HandleMessageError", str(inner),
+                file_name="whatsapp.py",
+                function_name="receive_greenapi",
+                traceback_text=tb,
+            )
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"greenapi webhook error: {e}\n{tb}")
+        log_bug(
+            "WebhookError", str(e),
+            file_name="whatsapp.py",
+            function_name="receive_greenapi",
+            traceback_text=tb,
+        )
+    return JSONResponse({"status": "ok"}, status_code=200)
+
+
 @router.post("/webhook")
 async def receive_webhook(request: Request, db: Session = Depends(get_db)):
     try:

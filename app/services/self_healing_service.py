@@ -12,14 +12,24 @@ def ensure_folders():
 
 def health_summary() -> dict:
     issues = []
-    if not settings.WHATSAPP_TOKEN:
-        issues.append("WHATSAPP_TOKEN missing — outbound WhatsApp messages will be skipped")
-    if not settings.WHATSAPP_PHONE_NUMBER_ID:
-        issues.append("WHATSAPP_PHONE_NUMBER_ID missing")
-    if not settings.WHATSAPP_VERIFY_TOKEN:
-        issues.append("WHATSAPP_VERIFY_TOKEN missing")
+    provider = settings.WHATSAPP_PROVIDER
+    if provider == "meta":
+        if not settings.WHATSAPP_TOKEN:
+            issues.append("WHATSAPP_TOKEN missing — outbound WhatsApp messages will be skipped")
+        if not settings.WHATSAPP_PHONE_NUMBER_ID:
+            issues.append("WHATSAPP_PHONE_NUMBER_ID missing")
+        if not settings.WHATSAPP_VERIFY_TOKEN:
+            issues.append("WHATSAPP_VERIFY_TOKEN missing")
+    elif provider == "greenapi":
+        if not settings.GREENAPI_INSTANCE_ID:
+            issues.append("GREENAPI_INSTANCE_ID missing")
+        if not settings.GREENAPI_TOKEN:
+            issues.append("GREENAPI_TOKEN missing")
+    else:
+        issues.append(f"Unknown WHATSAPP_PROVIDER: {provider!r} (expected 'meta' or 'greenapi')")
     return {
         "ok": len(issues) == 0,
+        "provider": provider,
         "issues": issues,
         "data_dir": str(settings.DATA_DIR),
         "uploads_dir": str(settings.UPLOADS_DIR),

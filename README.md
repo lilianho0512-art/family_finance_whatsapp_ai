@@ -57,7 +57,31 @@ docker compose up -d --build
 
 ---
 
-## 2. 接入 Meta WhatsApp Cloud API
+## 2. 接入 WhatsApp（两种 provider 任选）
+
+`.env` 设 `WHATSAPP_PROVIDER=meta` 或 `WHATSAPP_PROVIDER=greenapi` 切换。
+
+### 2A. Green API（推荐：注册简单，扫 QR 即可，不用 Meta 后台）
+
+1. 去 https://green-api.com 注册（邮箱即可，免费 Developer 实例）
+2. Console 创建 Instance → 拿 `idInstance` + `apiTokenInstance`
+3. 用你 WhatsApp app 扫 QR 把账号挂上去（这个号会成为 bot 的 sender）
+4. `.env` 填：
+   ```
+   WHATSAPP_PROVIDER=greenapi
+   GREENAPI_INSTANCE_ID=<idInstance>
+   GREENAPI_TOKEN=<apiTokenInstance>
+   ```
+5. 启服务：`run.bat` → 起 ngrok：`ngrok http 8000`
+6. 一键注册 webhook URL：
+   ```
+   python setup_greenapi_webhook.py https://<your-ngrok>.ngrok-free.app
+   ```
+7. WhatsApp 发 "Hi" 给那个挂上 Green API 的号 → 应回菜单
+
+> 注意：Green API 走 WhatsApp Web 协议（非官方），违反 Meta ToS，号有被封风险。**建议用备用号**，不要用主号。
+
+### 2B. Meta WhatsApp Cloud API
 
 1. 进入 [Meta for Developers](https://developers.facebook.com/) → 创建 Business App
 2. 添加产品 **WhatsApp** → 进入 **API Setup**

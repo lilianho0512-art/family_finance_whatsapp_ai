@@ -9,10 +9,19 @@ load_dotenv(BASE_DIR / ".env")
 
 class Settings:
     DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./data/family_finance.db")
+    WHATSAPP_PROVIDER = os.getenv("WHATSAPP_PROVIDER", "meta").lower().strip()
+
+    # Meta Cloud API
     WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN", "")
     WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN", "my_verify_token")
     WHATSAPP_PHONE_NUMBER_ID = os.getenv("WHATSAPP_PHONE_NUMBER_ID", "")
     WHATSAPP_API_VERSION = os.getenv("WHATSAPP_API_VERSION", "v21.0")
+
+    # Green API
+    GREENAPI_INSTANCE_ID = os.getenv("GREENAPI_INSTANCE_ID", "")
+    GREENAPI_TOKEN = os.getenv("GREENAPI_TOKEN", "")
+    GREENAPI_BASE_URL = os.getenv("GREENAPI_BASE_URL", "https://api.green-api.com").rstrip("/")
+    GREENAPI_MEDIA_URL = os.getenv("GREENAPI_MEDIA_URL", "https://media.green-api.com").rstrip("/")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
