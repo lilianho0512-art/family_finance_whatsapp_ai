@@ -1,0 +1,51 @@
+version: "3.9"
+
+# Default: app-only with SQLite (data/family_finance.db).
+#     docker compose up -d --build
+#
+# With PostgreSQL (recommended for production):
+#     docker compose --profile postgres up -d --build
+#     # then in .env set:
+#     #   DATABASE_URL=postgresql+psycopg2://family:family_secret@db:5432/family_finance
+
+services:
+  app:
+    build: .
+    image: family_finance_whatsapp_ai
+    container_name: family_finance_app
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Kuala_Lumpur
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./uploads:/app/uploads
+      - ./output:/app/output
+      - ./logs:/app/logs
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    container_name: family_finance_db
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_DB: family_finance
+      POSTGRES_USER: family
+      POSTGRES_PASSWORD: family_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U family -d family_finance"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
