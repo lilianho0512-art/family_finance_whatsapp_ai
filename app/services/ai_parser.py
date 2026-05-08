@@ -77,21 +77,32 @@ def parse_with_gemini(text: str):
         return None
 
 
+_DATE_KEYWORDS = (
+    "今天", "今日", "昨天", "昨日", "明天", "明日",
+    "today", "yesterday", "tomorrow",
+)
+_DATE_PATTERN_RE = __import__("re").compile(r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\b\d{1,2}[-/]\d{1,2}\b")
+
+
 def _normalize(parsed, fallback_text: str) -> dict:
     rule = rule_parser.parse(fallback_text)
     if not parsed or not isinstance(parsed, dict):
         return rule
     out = dict(rule)
-    # rule_parser is high-precision on explicit keywords (存钱/工资/...) and on
+    # rule_parser is high-precision on explicit keywords (存钱/工资/今天/...) and on
     # RM-prefixed amounts. Trust it over the LLM for those, otherwise let AI fill gaps.
     rule_explicit_type = (rule.get("record_type") or "unknown") != "unknown"
     rule_has_amount = float(rule.get("amount") or 0) > 0
+    low = (fallback_text or "").lower()
+    rule_explicit_date = any(kw in low for kw in _DATE_KEYWORDS) or bool(_DATE_PATTERN_RE.search(fallback_text or ""))
     for k, v in parsed.items():
         if v in (None, "", []):
             continue
         if k == "record_type" and rule_explicit_type:
             continue
         if k == "amount" and rule_has_amount:
+            continue
+        if k == "date" and rule_explicit_date:
             continue
         out[k] = v
     try:

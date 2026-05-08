@@ -30,11 +30,11 @@
   <table class="table table-striped table-sm">
     <thead><tr>
       <th>ID</th><th>WhatsApp</th><th>日期</th><th>类型</th><th>商家</th>
-      <th>金额</th><th>分类</th><th>付款</th><th>来源</th><th>状态</th><th>原文</th>
+      <th>金额</th><th>分类</th><th>付款</th><th>来源</th><th>状态</th><th>原文</th><th></th>
     </tr></thead>
     <tbody>
     {% for r in records %}
-      <tr>
+      <tr id="row-{{ r.id }}">
         <td>{{ r.id }}</td>
         <td>{{ r.whatsapp_number or '-' }}</td>
         <td>{{ r.date }}</td>
@@ -46,9 +46,15 @@
         <td>{{ r.source or '-' }}</td>
         <td><span class="badge bg-secondary">{{ r.status }}</span></td>
         <td><small>{{ (r.source_text or '')[:60] }}</small></td>
+        <td>
+          <button class="btn btn-sm btn-outline-danger"
+                  onclick="if(confirm('确定删除 #{{r.id}} ({{ r.merchant or r.record_type }} RM{{ '%.2f'|format(r.amount or 0) }})?')) fetch('/records/{{ r.id }}', {method:'DELETE'}).then(r=>{ if(r.ok) document.getElementById('row-{{ r.id }}').remove(); else alert('删除失败'); });">
+            删除
+          </button>
+        </td>
       </tr>
     {% else %}
-      <tr><td colspan="11" class="text-muted">暂无记录</td></tr>
+      <tr><td colspan="12" class="text-muted">暂无记录</td></tr>
     {% endfor %}
     </tbody>
   </table>

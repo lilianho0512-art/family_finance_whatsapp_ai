@@ -22,6 +22,13 @@ class Settings:
     GREENAPI_TOKEN = os.getenv("GREENAPI_TOKEN", "")
     GREENAPI_BASE_URL = os.getenv("GREENAPI_BASE_URL", "https://api.green-api.com").rstrip("/")
     GREENAPI_MEDIA_URL = os.getenv("GREENAPI_MEDIA_URL", "https://media.green-api.com").rstrip("/")
+
+    # Telegram
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    TELEGRAM_API_BASE = "https://api.telegram.org"
+
+    # Public-facing URL (used in onboarding messages so users know where to register)
+    PUBLIC_URL = os.getenv("PUBLIC_URL", "").rstrip("/")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
     OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
     OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")

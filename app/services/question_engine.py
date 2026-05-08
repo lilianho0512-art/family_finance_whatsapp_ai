@@ -60,29 +60,39 @@ PAYMENT_OPTIONS = {
     "G": "Other",
 }
 
-SAVINGS_SOURCE_QUESTION = (
-    "请选择储蓄账户：\n"
-    "A. Maybank\n"
-    "B. CIMB\n"
-    "C. Public Bank\n"
-    "D. Hong Leong\n"
-    "E. ASB\n"
-    "F. Tabung Haji\n"
-    "G. EPF\n"
-    "H. Cash\n"
-    "I. Other"
-)
-SAVINGS_SOURCE_OPTIONS = {
+ACCOUNT_OPTIONS = {
     "A": "Maybank",
     "B": "CIMB",
     "C": "Public Bank",
     "D": "Hong Leong",
-    "E": "ASB",
-    "F": "Tabung Haji",
-    "G": "EPF",
-    "H": "Cash",
-    "I": "Other",
+    "E": "UOB",
+    "F": "ASB",
+    "G": "Tabung Haji",
+    "H": "EPF",
+    "I": "Cash",
+    "J": "Other",
 }
+
+_ACCOUNT_LIST_TEXT = (
+    "A. Maybank\n"
+    "B. CIMB\n"
+    "C. Public Bank\n"
+    "D. Hong Leong\n"
+    "E. UOB\n"
+    "F. ASB\n"
+    "G. Tabung Haji\n"
+    "H. EPF\n"
+    "I. Cash\n"
+    "J. Other"
+)
+
+ACCOUNT_QUESTION_EXPENSE = "请选择账户（这笔开销从哪个银行/钱包扣）：\n" + _ACCOUNT_LIST_TEXT
+ACCOUNT_QUESTION_INCOME = "请选择账户（这笔收入进哪个银行）：\n" + _ACCOUNT_LIST_TEXT
+ACCOUNT_QUESTION_SAVINGS = "请选择储蓄账户（这笔储蓄存到哪个银行）：\n" + _ACCOUNT_LIST_TEXT
+
+# Backward-compatible aliases (older code still referenced these names)
+SAVINGS_SOURCE_QUESTION = ACCOUNT_QUESTION_SAVINGS
+SAVINGS_SOURCE_OPTIONS = ACCOUNT_OPTIONS
 
 INCOME_SOURCE_QUESTION = (
     "请选择收入来源：\n"
@@ -108,6 +118,7 @@ INCOME_SOURCE_OPTIONS = {
 def determine_next_question(record) -> Optional[Tuple[str, str, dict]]:
     """Return (step, question, options) or None when record is complete."""
     rt = (record.record_type or "unknown").lower()
+    acc = getattr(record, "account", None)
     if rt == "unknown" or not rt:
         return ("ask_record_type", RECORD_TYPE_QUESTION, RECORD_TYPE_OPTIONS)
     if rt == "expense":
@@ -115,15 +126,21 @@ def determine_next_question(record) -> Optional[Tuple[str, str, dict]]:
             return ("ask_category", CATEGORY_QUESTION, CATEGORY_OPTIONS)
         if not record.payment_method:
             return ("ask_payment_method", PAYMENT_QUESTION, PAYMENT_OPTIONS)
+        if not acc:
+            return ("ask_account_expense", ACCOUNT_QUESTION_EXPENSE, ACCOUNT_OPTIONS)
     if rt == "savings":
-        if not record.source:
-            return ("ask_savings_source", SAVINGS_SOURCE_QUESTION, SAVINGS_SOURCE_OPTIONS)
+        if not acc:
+            return ("ask_account_savings", ACCOUNT_QUESTION_SAVINGS, ACCOUNT_OPTIONS)
     if rt == "income":
         if not record.source:
             return ("ask_income_source", INCOME_SOURCE_QUESTION, INCOME_SOURCE_OPTIONS)
+        if not acc:
+            return ("ask_account_income", ACCOUNT_QUESTION_INCOME, ACCOUNT_OPTIONS)
     if rt == "transfer":
         if not record.payment_method:
             return ("ask_payment_method", PAYMENT_QUESTION, PAYMENT_OPTIONS)
+        if not acc:
+            return ("ask_account_expense", ACCOUNT_QUESTION_EXPENSE, ACCOUNT_OPTIONS)
     return None
 
 
@@ -135,8 +152,11 @@ def resolve_answer(step: str, answer: str):
         "ask_record_type": RECORD_TYPE_OPTIONS,
         "ask_category": CATEGORY_OPTIONS,
         "ask_payment_method": PAYMENT_OPTIONS,
-        "ask_savings_source": SAVINGS_SOURCE_OPTIONS,
+        "ask_savings_source": ACCOUNT_OPTIONS,  # legacy alias
         "ask_income_source": INCOME_SOURCE_OPTIONS,
+        "ask_account_expense": ACCOUNT_OPTIONS,
+        "ask_account_savings": ACCOUNT_OPTIONS,
+        "ask_account_income": ACCOUNT_OPTIONS,
     }
     table = mapping.get(step)
     if not table:

@@ -44,6 +44,7 @@ class FinancialRecord(Base):
     category = Column(String(100))
     payment_method = Column(String(50))
     source = Column(String(100))
+    account = Column(String(80), index=True)  # which bank/wallet this record touched
     note = Column(Text)
     source_text = Column(Text)
     source_type = Column(String(20), default="text")
@@ -69,6 +70,28 @@ class Conversation(Base):
     options_json = Column(Text)
     state = Column(String(20), default="active")
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class BankAccount(Base):
+    __tablename__ = "bank_accounts"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    family_id = Column(Integer, ForeignKey("families.id"), index=True, nullable=False)
+    name = Column(String(80), nullable=False, index=True)  # "Maybank", "UOB", "Cash"
+    note = Column(String(200))
+    is_active = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AccountBalance(Base):
+    """A user-supplied balance snapshot for reconciliation."""
+    __tablename__ = "account_balances"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    family_id = Column(Integer, ForeignKey("families.id"), index=True, nullable=False)
+    account_name = Column(String(80), nullable=False, index=True)
+    as_of_date = Column(Date, nullable=False)
+    balance = Column(Float, nullable=False, default=0.0)
+    note = Column(String(200))
+    created_at = Column(DateTime, default=datetime.utcnow)
 
 
 class BugLog(Base):

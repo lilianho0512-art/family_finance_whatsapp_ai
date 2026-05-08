@@ -132,12 +132,61 @@ def _direct_download(url: str, hint_name: str = "") -> str:
     try:
         resp = requests.get(url, timeout=30)
         if resp.status_code != 200:
-            logger.warning(f"greenapi direct_download HTTP {resp.status_code}")
+            logger.warning(f"direct_download HTTP {resp.status_code}")
             return ""
         return _save_bytes(resp.content, resp.headers.get("Content-Type") or "",
-                           hint_name or f"greenapi_{int(time.time())}")
+                           hint_name or f"download_{int(time.time())}")
     except Exception as e:
-        logger.warning(f"greenapi direct_download failed: {e}")
+        logger.warning(f"direct_download failed: {e}")
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# Telegram Bot API
+# ---------------------------------------------------------------------------
+
+def _telegram_url(method: str) -> str:
+    return f"{settings.TELEGRAM_API_BASE}/bot{settings.TELEGRAM_BOT_TOKEN}/{method}"
+
+
+def _telegram_send_text(chat_id: str, body: str, retries: int = 3) -> bool:
+    if not settings.TELEGRAM_BOT_TOKEN:
+        logger.warning("Telegram bot token missing; skipping send_text")
+        return False
+    payload = {"chat_id": chat_id, "text": body[:4000], "disable_web_page_preview": True}
+    last_err = None
+    for attempt in range(1, retries + 1):
+        try:
+            resp = requests.post(_telegram_url("sendMessage"), json=payload, timeout=15)
+            if resp.status_code == 200 and resp.json().get("ok"):
+                return True
+            last_err = f"HTTP {resp.status_code}: {resp.text[:300]}"
+            logger.warning(f"telegram send_text attempt {attempt} failed: {last_err}")
+        except Exception as e:
+            last_err = str(e)
+            logger.warning(f"telegram send_text attempt {attempt} exception: {e}")
+        time.sleep(min(2 ** attempt, 8))
+    logger.error(f"telegram send_text exhausted retries to {chat_id}: {last_err}")
+    return False
+
+
+def telegram_resolve_file_url(file_id: str) -> str:
+    """getFile → file_path → public download URL (with token)."""
+    if not settings.TELEGRAM_BOT_TOKEN or not file_id:
+        return ""
+    try:
+        resp = requests.get(_telegram_url("getFile"), params={"file_id": file_id}, timeout=15)
+        if resp.status_code != 200:
+            logger.warning(f"telegram getFile HTTP {resp.status_code}")
+            return ""
+        data = resp.json()
+        if not data.get("ok"):
+            logger.warning(f"telegram getFile not ok: {data}")
+            return ""
+        path = data["result"]["file_path"]
+        return f"{settings.TELEGRAM_API_BASE}/file/bot{settings.TELEGRAM_BOT_TOKEN}/{path}"
+    except Exception as e:
+        logger.warning(f"telegram getFile failed: {e}")
         return ""
 
 
@@ -169,22 +218,33 @@ def _save_bytes(data: bytes, content_type: str, name_stem: str) -> str:
 # ---------------------------------------------------------------------------
 
 def send_text(to_number: str, body: str, retries: int = 3) -> bool:
-    if settings.WHATSAPP_PROVIDER == "greenapi":
+    provider = settings.WHATSAPP_PROVIDER
+    if provider == "greenapi":
         return _greenapi_send_text(to_number, body, retries)
+    if provider == "telegram":
+        return _telegram_send_text(to_number, body, retries)
     return _meta_send_text(to_number, body, retries)
 
 
 def get_media_url(media_id: str) -> str:
-    # Only used by Meta path; Green API gives us downloadUrl directly.
     if settings.WHATSAPP_PROVIDER == "greenapi":
         return media_id if media_id.startswith("http") else ""
+    if settings.WHATSAPP_PROVIDER == "telegram":
+        return media_id if media_id.startswith("http") else telegram_resolve_file_url(media_id)
     return _meta_get_media_url(media_id)
 
 
 def download_media(media_id_or_url: str) -> str:
-    """Downloads to uploads/. Accepts a Meta media_id, OR a direct URL (Green API)."""
+    """Downloads to uploads/. Accepts:
+       - Meta media_id (resolves via Graph API)
+       - Direct URL (Green API hands us downloadUrl)
+       - Telegram file_id (resolves via getFile then downloads)
+    """
     if not media_id_or_url:
         return ""
     if media_id_or_url.startswith("http"):
         return _direct_download(media_id_or_url)
+    if settings.WHATSAPP_PROVIDER == "telegram":
+        url = telegram_resolve_file_url(media_id_or_url)
+        return _direct_download(url) if url else ""
     return _meta_download_media(media_id_or_url)

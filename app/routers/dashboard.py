@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import Family
-from app.services import record_service, family_service
+from app.services import record_service, family_service, account_service
 from app.routers.auth import get_optional_user
 
 router = APIRouter()
@@ -31,6 +31,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     need_q = record_service.status_count(db, family_id, "need_question")
     need_r = record_service.status_count(db, family_id, "need_review")
     enrollments = family_service.list_enrollments(db, family_id)
+    account_balances = account_service.all_account_balances(db, family_id)
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -48,5 +49,6 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "need_r": need_r,
             "categories": cat_sorted,
             "enrollments": enrollments,
+            "account_balances": account_balances,
         },
     )

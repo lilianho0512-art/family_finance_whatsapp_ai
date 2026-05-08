@@ -2,23 +2,39 @@ import re
 from app.utils.date_tools import parse_date
 from app.utils.money_tools import extract_amount
 
+# Explicit type markers — highest priority. If user (or our own confirmation
+# message echoed back) writes 家庭开销/家庭储蓄/家庭收入/家庭转账 we lock that in.
+EXPLICIT_TYPE_PREFIXES = [
+    ("expense",  ["家庭开销", "家用开销"]),
+    ("savings",  ["家庭储蓄", "家用储蓄"]),
+    ("income",   ["家庭收入", "家用收入"]),
+    ("transfer", ["家庭转账", "家用转账"]),
+]
+
 EXPENSE_KEYWORDS = [
-    "买菜", "菜市", "超市", "买", "花了", "花掉", "外食",
+    "买菜", "菜市", "超市", "买", "花了", "花掉", "外食", "开销",
     "lunch", "dinner", "breakfast", "groceries", "petrol", "fuel", "shopping",
 ]
 SAVINGS_KEYWORDS = ["存钱", "储蓄", "save", "savings", "deposit"]
 INCOME_KEYWORDS = ["工资", "薪水", "薪资", "奖金", "salary", "bonus", "income", "收入", "freelance"]
-TRANSFER_KEYWORDS = ["转账", "汇款", "transfer", "duitnow"]
+# Note: bare "transfer" intentionally NOT listed — it's a payment method too
+# (Bank Transfer / Online Transfer). Standalone 'transfer' is matched via regex below.
+TRANSFER_KEYWORDS = ["转账", "汇款", "duitnow"]
+TRANSFER_STANDALONE_RE = re.compile(
+    r"(?<!bank\s)(?<!wire\s)(?<!online\s)(?<!money\s)\btransfer\b",
+    re.IGNORECASE,
+)
 
 CATEGORY_HINTS = {
-    "Groceries": ["买菜", "tesco", "aeon", "lotus", "mydin", "giant", "groceries", "village grocer", "jaya grocer", "ben's"],
-    "Food": ["lunch", "dinner", "breakfast", "外食", "mamak", "restaurant", "kfc", "mcdonald", "starbucks", "kopitiam", "饭", "吃"],
-    "Baby": ["baby", "diaper", "尿布", "奶粉", "milk powder", "stroller"],
-    "Utilities": ["tnb", "syabas", "indah water", "unifi", "maxis", "celcom", "digi", "water bill", "electric", "水费", "电费", "网费"],
-    "Petrol": ["petron", "shell", "petronas", "caltex", "bhpetrol", "petrol", "fuel", "油费"],
-    "Medical": ["clinic", "hospital", "pharmacy", "guardian", "watson", "诊所", "医院", "药"],
-    "Education": ["tuition", "school", "学费", "tadika", "kindergarten", "课"],
-    "Online Shopping": ["shopee", "lazada", "amazon", "tiktok shop", "网购"],
+    "Groceries": ["groceries", "买菜", "tesco", "aeon", "lotus", "mydin", "giant", "village grocer", "jaya grocer", "ben's", "日用品"],
+    "Food": ["food", "lunch", "dinner", "breakfast", "外食", "mamak", "restaurant", "kfc", "mcdonald", "starbucks", "kopitiam", "饭", "吃"],
+    "Baby": ["baby", "diaper", "尿布", "奶粉", "milk powder", "stroller", "小孩"],
+    "Utilities": ["utilities", "tnb", "syabas", "indah water", "unifi", "maxis", "celcom", "digi", "water bill", "electric", "水费", "电费", "网费"],
+    "Petrol": ["petrol", "petron", "shell", "petronas", "caltex", "bhpetrol", "fuel", "油费"],
+    "Medical": ["medical", "clinic", "hospital", "pharmacy", "guardian", "watson", "诊所", "医院", "药"],
+    "Education": ["education", "tuition", "school", "学费", "tadika", "kindergarten", "课"],
+    "Online Shopping": ["online shopping", "shopee", "lazada", "amazon", "tiktok shop", "网购"],
+    "Others": ["others", "其他"],
 }
 
 PAYMENT_HINTS = {
@@ -41,16 +57,27 @@ MERCHANT_RE = re.compile(r"\b([A-Z][A-Za-z0-9&'\-]{1,30}(?:\s+[A-Z][A-Za-z0-9&'\
 
 
 def detect_record_type(text: str) -> str:
-    t = (text or "").lower()
+    if not text:
+        return "unknown"
+    # 1. Explicit "家庭X" type markers — highest priority, can't be overridden
+    for rtype, hints in EXPLICIT_TYPE_PREFIXES:
+        for h in hints:
+            if h in text:
+                return rtype
+    t = text.lower()
     for kw in SAVINGS_KEYWORDS:
         if kw.lower() in t:
             return "savings"
     for kw in INCOME_KEYWORDS:
         if kw.lower() in t:
             return "income"
+    # 2. TRANSFER — only via 转账/汇款/duitnow OR a standalone "transfer" word
+    #    (NOT "Bank Transfer" / "Online Transfer" — those are payment methods)
     for kw in TRANSFER_KEYWORDS:
         if kw.lower() in t:
             return "transfer"
+    if TRANSFER_STANDALONE_RE.search(text):
+        return "transfer"
     for kw in EXPENSE_KEYWORDS:
         if kw.lower() in t:
             return "expense"

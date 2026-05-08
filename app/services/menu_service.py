@@ -20,7 +20,11 @@ WELCOME_TEXT = (
     "4. 这个月花了多少？\n"
     "5. 这个月储蓄多少？\n"
     "6. Baby 类别花多少？\n"
-    "7. 上传收据照片\n\n"
+    "7. 上传收据照片\n"
+    "8. 撤销 / 删除 #5（删除最近一笔 / 指定 ID）\n"
+    "9. 余额（查各账户当前计算余额）\n"
+    "10. 设置 Maybank 5000（记录今天 Maybank 余额快照）\n"
+    "11. 加账户 OCBC（注册新账户）\n\n"
     "请回复 A/B/C/D，或直接发送账单资料。"
 )
 
@@ -28,7 +32,8 @@ WELCOME_TEXT = (
 def is_greeting(text: str) -> bool:
     if not text:
         return False
-    return text.strip().lower() in GREETING_KEYWORDS
+    # Strip leading "/" so Telegram-style commands like "/start" / "/menu" / "/hi" match.
+    return text.strip().lower().lstrip("/") in GREETING_KEYWORDS
 
 
 def get_welcome_text() -> str:

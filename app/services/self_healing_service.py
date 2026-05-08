@@ -25,8 +25,14 @@ def health_summary() -> dict:
             issues.append("GREENAPI_INSTANCE_ID missing")
         if not settings.GREENAPI_TOKEN:
             issues.append("GREENAPI_TOKEN missing")
+    elif provider == "telegram":
+        if not settings.TELEGRAM_BOT_TOKEN:
+            issues.append("TELEGRAM_BOT_TOKEN missing")
     else:
-        issues.append(f"Unknown WHATSAPP_PROVIDER: {provider!r} (expected 'meta' or 'greenapi')")
+        issues.append(
+            f"Unknown WHATSAPP_PROVIDER: {provider!r} "
+            "(expected 'meta', 'greenapi', or 'telegram')"
+        )
     return {
         "ok": len(issues) == 0,
         "provider": provider,

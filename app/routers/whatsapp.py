@@ -50,6 +50,69 @@ async def verify_webhook(
     return PlainTextResponse(content="forbidden", status_code=403)
 
 
+@router.post("/webhook/telegram")
+async def receive_telegram(request: Request, db: Session = Depends(get_db)):
+    """Telegram Bot API webhook — translates Update payload into our envelope."""
+    try:
+        body = await request.json()
+    except Exception as e:
+        logger.warning(f"telegram webhook bad json: {e}")
+        return JSONResponse({"status": "ignored"}, status_code=200)
+
+    try:
+        message = body.get("message") or body.get("edited_message") or {}
+        if not message:
+            return JSONResponse({"status": "ignored"}, status_code=200)
+
+        chat = message.get("chat") or {}
+        if chat.get("type") not in ("private", None):
+            # Ignore groups / channels; bot is for personal use.
+            return JSONResponse({"status": "ignored"}, status_code=200)
+
+        chat_id = str(chat.get("id") or message.get("from", {}).get("id") or "")
+        if not chat_id:
+            return JSONResponse({"status": "ignored"}, status_code=200)
+
+        msg_id = str(message.get("message_id") or "")
+        meta_msg = {"from": chat_id, "id": msg_id}
+
+        if "text" in message:
+            meta_msg.update({"type": "text", "text": {"body": message["text"]}})
+        elif "photo" in message:
+            # Telegram sends an array of resolutions; pick the largest (last).
+            photos = message.get("photo") or []
+            file_id = (photos[-1].get("file_id") if photos else "") or ""
+            caption = message.get("caption") or ""
+            meta_msg.update({"type": "image", "image": {"id": file_id, "caption": caption}})
+        elif "document" in message:
+            doc = message.get("document") or {}
+            meta_msg.update({
+                "type": "document",
+                "document": {"id": doc.get("file_id", ""), "caption": message.get("caption") or ""},
+            })
+        elif "voice" in message or "audio" in message:
+            meta_msg.update({"type": "audio"})
+        else:
+            logger.info(f"telegram unsupported message: keys={list(message.keys())}")
+            return JSONResponse({"status": "ignored"}, status_code=200)
+
+        try:
+            _handle_message(db, meta_msg)
+        except Exception as inner:
+            tb = traceback.format_exc()
+            logger.error(f"_handle_message (telegram) error: {inner}\n{tb}")
+            log_bug("HandleMessageError", str(inner),
+                    file_name="whatsapp.py", function_name="receive_telegram",
+                    traceback_text=tb)
+    except Exception as e:
+        tb = traceback.format_exc()
+        logger.error(f"telegram webhook error: {e}\n{tb}")
+        log_bug("WebhookError", str(e),
+                file_name="whatsapp.py", function_name="receive_telegram",
+                traceback_text=tb)
+    return JSONResponse({"status": "ok"}, status_code=200)
+
+
 @router.post("/webhook/greenapi")
 async def receive_greenapi(request: Request, db: Session = Depends(get_db)):
     """Green API webhook — translates payload shape and reuses _handle_message."""
@@ -158,11 +221,19 @@ async def receive_webhook(request: Request, db: Session = Depends(get_db)):
     return JSONResponse({"status": "ok"}, status_code=200)
 
 
-def _onboarding_text() -> str:
+def _onboarding_text(from_number: str = "") -> str:
+    base = settings.PUBLIC_URL or f"http://<your-domain>:{settings.APP_PORT}"
+    register_url = f"{base}/register"
+    if settings.WHATSAPP_PROVIDER == "telegram":
+        return (
+            "你好 👋 你还没绑定家庭。\n\n"
+            f"1) 打开注册页面：\n   {register_url}\n\n"
+            f"2) 在「WhatsApp 号码」一栏填这串数字（这是你的 Telegram ID）：\n   {from_number}\n\n"
+            "3) 完成后回这里发 /start 即可开始记账。"
+        )
     return (
         "你好 👋 你的 WhatsApp 号码尚未绑定家庭。\n\n"
-        "请打开 Dashboard 注册（创建家庭账户并绑定此号码）：\n"
-        f"  http://<your-domain>:{settings.APP_PORT}/register\n\n"
+        f"请打开 Dashboard 注册（创建家庭账户并绑定此号码）：\n   {register_url}\n\n"
         "或让管理员在已有家庭中点击「添加 WhatsApp」绑定你的号码。\n"
         "绑定后再回复 Hi 即可开始记账。"
     )
@@ -176,12 +247,11 @@ def _handle_message(db: Session, msg: dict):
     # Resolve family from WhatsApp number — every action is family-scoped.
     enrollment = auth_service.get_enrollment_for_number(db, from_number)
     if enrollment is None:
-        # Allow greetings to still get a friendly onboarding reply.
         body_text = ""
         if msg_type == "text":
             body_text = (msg.get("text") or {}).get("body", "") or ""
         if menu_service.is_greeting(body_text) or body_text:
-            whatsapp_service.send_text(from_number, _onboarding_text())
+            whatsapp_service.send_text(from_number, _onboarding_text(from_number))
         return
 
     family_id = enrollment.family_id
@@ -261,13 +331,19 @@ def _handle_message(db: Session, msg: dict):
                 "ask_record_type": "record_type",
                 "ask_category": "category",
                 "ask_payment_method": "payment_method",
-                "ask_savings_source": "source",
+                "ask_savings_source": "account",  # legacy: now stored as account
                 "ask_income_source": "source",
+                "ask_account_expense": "account",
+                "ask_account_savings": "account",
+                "ask_account_income": "account",
             }
             field = field_map.get(conv.current_step)
             if field:
                 record_service.update_record(db, rec.id, **{field: value})
                 rec = record_service.get_record(db, rec.id)
+                if field == "account" and value:
+                    from app.services import account_service
+                    account_service.ensure_account(db, family_id, value)
 
             nxt = question_engine.determine_next_question(rec)
             if nxt:
@@ -292,7 +368,19 @@ def _handle_message(db: Session, msg: dict):
                 whatsapp_service.send_text(from_number, _render_confirmation(rec))
             return
 
-    # 3. queries (family-scoped)
+    # 3. delete commands (撤销 / 删除 #id)
+    delete_reply = _try_handle_delete(db, family_id, from_number, text)
+    if delete_reply is not None:
+        whatsapp_service.send_text(from_number, delete_reply)
+        return
+
+    # 3b. account / ledger commands (余额 / 设置 X 5000 / 加账户 X)
+    account_reply = _try_handle_account_command(db, family_id, text)
+    if account_reply is not None:
+        whatsapp_service.send_text(from_number, account_reply)
+        return
+
+    # 4. queries (family-scoped)
     query_reply = _try_handle_query(db, family_id, text)
     if query_reply is not None:
         whatsapp_service.send_text(from_number, query_reply)
@@ -372,6 +460,85 @@ def _render_confirmation(rec) -> str:
     if rec.date:
         lines.append(f"日期：{rec.date.isoformat()}")
     return "\n".join(lines)
+
+
+_UNDO_RE = re.compile(r"^\s*(/?undo|撤销|删除最近|删除上一笔)\s*$", re.IGNORECASE)
+_DELETE_BY_ID_RE = re.compile(r"^\s*(?:删除|/?del)\s*#?(\d+)\s*$", re.IGNORECASE)
+
+
+def _try_handle_delete(db: Session, family_id, from_number: str, text: str):
+    if _UNDO_RE.match(text or ""):
+        rec = (
+            db.query(FinancialRecord)
+            .filter(FinancialRecord.whatsapp_number == from_number,
+                    FinancialRecord.family_id == family_id)
+            .order_by(FinancialRecord.created_at.desc())
+            .first()
+        )
+        if rec is None:
+            return "没有可撤销的记录。"
+        snap = f"#{rec.id} {rec.merchant or rec.record_type} RM{rec.amount or 0:.2f} ({rec.date})"
+        db.delete(rec)
+        db.commit()
+        # If a conversation pointed at this record, clear it.
+        from app.services import conversation_memory
+        conv = conversation_memory.get_conversation(db, from_number)
+        if conv and conv.current_record_id == rec.id:
+            conversation_memory.clear_conversation(db, from_number)
+        return f"已撤销最近一笔 ✅\n{snap}"
+
+    m = _DELETE_BY_ID_RE.match(text or "")
+    if m:
+        rec_id = int(m.group(1))
+        rec = db.query(FinancialRecord).get(rec_id)
+        if rec is None or rec.family_id != family_id:
+            return f"找不到记录 #{rec_id}（或不属于你的家庭）"
+        snap = f"#{rec.id} {rec.merchant or rec.record_type} RM{rec.amount or 0:.2f} ({rec.date})"
+        db.delete(rec)
+        db.commit()
+        return f"已删除 ✅\n{snap}"
+
+    return None
+
+
+_BALANCE_LIST_RE = re.compile(r"^\s*(余额|balance)s?\s*$", re.IGNORECASE)
+_BALANCE_SET_RE = re.compile(r"^\s*(?:设置|set)\s+([A-Za-z一-龥][\w一-龥\s]{0,40}?)\s+(?:RM|MYR)?\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.IGNORECASE)
+_ADD_ACCOUNT_RE = re.compile(r"^\s*(?:加账户|add account)\s+(.+?)\s*$", re.IGNORECASE)
+
+
+def _try_handle_account_command(db, family_id, text: str):
+    from app.services import account_service
+    from app.utils.money_tools import format_money
+    if _BALANCE_LIST_RE.match(text or ""):
+        rows = account_service.all_account_balances(db, family_id)
+        if not rows:
+            return "还没有任何账户。\n用「加账户 Maybank」注册账户，或「设置 Maybank 5000」直接设个余额快照。"
+        lines = ["💰 各账户余额："]
+        for r in rows:
+            snap_str = f"快照 {r['snapshot_date']}" if r['snapshot_date'] else "未设快照"
+            lines.append(
+                f"\n• {r['account']} = {format_money(r['computed_balance'])}\n"
+                f"  ({snap_str} {format_money(r['snapshot_balance'])} "
+                f"+收{r['income_since']:.0f} -支{r['expense_since']:.0f} +存{r['savings_since']:.0f})"
+            )
+        return "\n".join(lines)
+
+    m = _BALANCE_SET_RE.match(text or "")
+    if m:
+        name = m.group(1).strip()
+        bal = float(m.group(2))
+        snap = account_service.add_balance_snapshot(db, family_id, name, bal)
+        return f"✅ 已记录余额快照\n{name} = {format_money(bal)} ({snap.as_of_date})"
+
+    m = _ADD_ACCOUNT_RE.match(text or "")
+    if m:
+        name = m.group(1).strip()
+        if not name:
+            return "请提供账户名，如「加账户 OCBC」"
+        acc = account_service.ensure_account(db, family_id, name)
+        return f"✅ 已注册账户：{acc.name}"
+
+    return None
 
 
 _QUERY_PATTERNS = [
