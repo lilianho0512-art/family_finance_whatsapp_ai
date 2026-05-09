@@ -37,12 +37,20 @@
   </div>
 </nav>
 <div class="container">
+  {% macro fxhint(group) %}
+    {% if group and group|length > 0 and (group|length > 1 or family.default_currency not in group) %}
+      <small class="text-white-50 d-block" title="Converted at today's rates">
+        from {{ group|map('upper')|join(' / ') }}
+      </small>
+    {% endif %}
+  {% endmacro %}
   <div class="row g-3">
-    <div class="col-md-3"><div class="card text-bg-success"><div class="card-body"><h6>Income (this month)</h6><h3>{{ income|money(family.default_currency) }}</h3></div></div></div>
-    <div class="col-md-3"><div class="card text-bg-danger"><div class="card-body"><h6>Expenses (this month)</h6><h3>{{ expense|money(family.default_currency) }}</h3></div></div></div>
-    <div class="col-md-3"><div class="card text-bg-info"><div class="card-body"><h6>Savings (this month)</h6><h3>{{ savings|money(family.default_currency) }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-bg-success"><div class="card-body"><h6>Income (this month)</h6><h3>{{ income|money(family.default_currency) }}</h3>{{ fxhint(income_by_cur) }}</div></div></div>
+    <div class="col-md-3"><div class="card text-bg-danger"><div class="card-body"><h6>Expenses (this month)</h6><h3>{{ expense|money(family.default_currency) }}</h3>{{ fxhint(expense_by_cur) }}</div></div></div>
+    <div class="col-md-3"><div class="card text-bg-info"><div class="card-body"><h6>Savings (this month)</h6><h3>{{ savings|money(family.default_currency) }}</h3>{{ fxhint(savings_by_cur) }}</div></div></div>
     <div class="col-md-3"><div class="card text-bg-warning"><div class="card-body"><h6>Savings rate</h6><h3>{{ rate }}%</h3></div></div></div>
   </div>
+  {% if has_fx %}<small class="text-muted d-block mt-1">FX totals converted to {{ family.default_currency }} via cached daily rates.</small>{% endif %}
 
   <div class="row g-3 mt-1">
     <div class="col-md-3"><div class="card"><div class="card-body"><h6>Today's expenses</h6><h4>{{ today|money(family.default_currency) }}</h4></div></div></div>

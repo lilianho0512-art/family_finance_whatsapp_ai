@@ -24,6 +24,17 @@
 </nav>
 <div class="container">
   <h3>This month's report</h3>
+  {% if has_fx %}
+    <div class="alert alert-info py-1 small mb-2">
+      Totals shown in <strong>{{ family.default_currency }}</strong>, converted from native currencies at today's FX rates.
+      Native breakdown:
+      {% for g, label in [(income_by_cur, 'income'), (expense_by_cur, 'expenses'), (savings_by_cur, 'savings')] %}
+        {% if g and (g|length > 1 or family.default_currency not in g) %}
+          <span class="ms-2">{{ label }}: {% for c, v in g.items() %}{{ "%.2f"|format(v) }} {{ c }}{% if not loop.last %}, {% endif %}{% endfor %}</span>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% endif %}
   <ul class="list-group mb-4">
     <li class="list-group-item d-flex justify-content-between"><span>Income (this month)</span><span>{{ income|money(family.default_currency) }}</span></li>
     <li class="list-group-item d-flex justify-content-between"><span>Expenses (this month)</span><span>{{ expense|money(family.default_currency) }}</span></li>

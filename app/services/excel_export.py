@@ -4,7 +4,9 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 from sqlalchemy.orm import Session
 from app.config import settings
+from app.models import Family
 from app.services import record_service, loan_service
+from app.utils import fx
 from app.utils.date_tools import month_range
 
 HEADERS = [
@@ -41,20 +43,35 @@ def export_monthly(db: Session, family_id: Optional[int], ref: date = None) -> s
     s, e = month_range(ref)
     wb = Workbook()
 
+    fam = db.query(Family).get(family_id) if family_id else None
+    base_cur = (fam.default_currency if fam else "MYR") or "MYR"
+
+    inc_g = record_service.month_total_grouped(db, family_id, "income", ref)
+    exp_g = record_service.month_total_grouped(db, family_id, "expense", ref)
+    sav_g = record_service.month_total_grouped(db, family_id, "savings", ref)
+    inc = fx.convert_grouped(inc_g, base_cur)
+    exp = fx.convert_grouped(exp_g, base_cur)
+    sav = fx.convert_grouped(sav_g, base_cur)
+    rate = round((sav / inc * 100), 2) if inc > 0 else 0.0
+    has_fx = any(len(g) > 1 or (g and base_cur not in g) for g in (inc_g, exp_g, sav_g))
+
     ws = wb.active
     ws.title = "Summary"
-    inc = record_service.month_total(db, family_id, "income", ref)
-    exp = record_service.month_total(db, family_id, "expense", ref)
-    sav = record_service.month_total(db, family_id, "savings", ref)
-    rate = record_service.savings_rate(db, family_id, ref)
     ws.append(["Family Finance Monthly Report"])
     ws.append(["Period", f"{s.isoformat()} ~ {e.isoformat()}"])
     ws.append(["Family ID", family_id if family_id is not None else "(all)"])
+    ws.append(["Reporting currency", base_cur])
     ws.append([])
-    ws.append(["Income", inc])
+    ws.append(["Income",  inc])
     ws.append(["Expense", exp])
     ws.append(["Savings", sav])
     ws.append(["Savings Rate %", rate])
+    if has_fx:
+        ws.append([])
+        ws.append(["Native breakdown (pre-conversion)"])
+        for label, g in (("Income", inc_g), ("Expense", exp_g), ("Savings", sav_g)):
+            for cur, amt in (g or {}).items():
+                ws.append([f"  {label} ({cur})", amt])
     ws["A1"].font = Font(bold=True, size=14)
 
     all_records = record_service.list_all(db, family_id)

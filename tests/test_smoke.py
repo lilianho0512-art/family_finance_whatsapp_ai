@@ -567,6 +567,66 @@ def test_recurring_service_currency_normalization():
     assert upd.currency == "MYR"
 
 
+def test_fx_same_currency_is_one():
+    from app.utils import fx
+    assert fx.get_rate("USD", "USD") == 1.0
+    assert fx.get_rate("MYR", "MYR") == 1.0
+    # Empty inputs → 1.0 too
+    assert fx.get_rate("", "USD") == 1.0
+
+
+def test_fx_convert_grouped(monkeypatch):
+    from app.utils import fx
+    # Stub out get_rate so tests don't hit the network.
+    monkeypatch.setattr(fx, "get_rate",
+        lambda f, t, day=None: 1.0 if f == t else {("USD","MYR"): 4.50, ("SGD","MYR"): 3.50, ("MYR","USD"): 0.222}.get((f.upper(), t.upper()), 1.0)
+    )
+    grouped = {"MYR": 100.0, "USD": 50.0, "SGD": 20.0}
+    # In MYR: 100 + 50*4.5 + 20*3.5 = 100 + 225 + 70 = 395
+    assert fx.convert_grouped(grouped, "MYR") == 395.0
+    # In USD: 100*0.222 + 50 + 20*1.0 = 22.20 + 50 + 20 = 92.20
+    assert fx.convert_grouped(grouped, "USD") == 92.20
+
+
+def test_fx_fallback_when_api_dead(monkeypatch, tmp_path):
+    """When the upstream is unreachable, get_rate must return 1.0 and not throw."""
+    from app.utils import fx
+    # Redirect cache to a temp path to avoid clobbering the real file.
+    monkeypatch.setattr(fx, "_CACHE_PATH", tmp_path / "fx_cache.json")
+    monkeypatch.setattr(fx, "_fetch_rates_from_base", lambda base, day: None)
+    assert fx.get_rate("USD", "MYR") == 1.0
+
+
+def test_report_service_converts_to_family_default(monkeypatch):
+    """A family with USD + SGD records but MYR default currency should
+    see monthly_summary_text totals in MYR, with native breakdown noted."""
+    from datetime import date as _d
+    from app.services import record_service, report_service
+    from app.utils import fx
+    from app.models import FinancialRecord
+
+    db = _make_db()
+    fam = _make_family(db)
+    # default_currency = MYR (default)
+    db.add_all([
+        FinancialRecord(family_id=fam.id, record_type="expense", amount=100.0,
+                        currency="USD", date=_d.today(), status="completed"),
+        FinancialRecord(family_id=fam.id, record_type="income", amount=200.0,
+                        currency="SGD", date=_d.today(), status="completed"),
+    ])
+    db.commit()
+
+    # Stable rates regardless of network
+    monkeypatch.setattr(fx, "get_rate",
+        lambda f, t, day=None: 1.0 if f == t else {("USD","MYR"): 4.5, ("SGD","MYR"): 3.5}.get((f, t), 1.0))
+
+    text = report_service.monthly_summary_text(db, fam.id)
+    # USD 100 -> MYR 450; SGD 200 -> MYR 700
+    assert "RM 450.00" in text
+    assert "RM 700.00" in text
+    assert "converted to MYR" in text
+
+
 def test_change_password_happy_path():
     from app.services import auth_service
     from app.models import User

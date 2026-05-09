@@ -129,3 +129,34 @@ def status_count(db: Session, family_id: Optional[int], status: str) -> int:
     return _scope(db.query(FinancialRecord), family_id).filter(
         FinancialRecord.status == status
     ).count()
+
+
+# ---------------------------------------------------------------------------
+# Currency-grouped helpers (for FX conversion in dashboards/reports)
+# ---------------------------------------------------------------------------
+
+
+def sum_by_type_grouped(db: Session, family_id: Optional[int], record_type: str,
+                        start: date, end: date) -> dict:
+    """{currency: total} for completed records of `record_type` in [start, end]."""
+    q = _scope(
+        db.query(FinancialRecord.currency, func.sum(FinancialRecord.amount)),
+        family_id,
+    ).filter(
+        FinancialRecord.record_type == record_type,
+        FinancialRecord.date >= start,
+        FinancialRecord.date <= end,
+        FinancialRecord.status == "completed",
+    ).group_by(FinancialRecord.currency)
+    return {(c or "MYR"): float(v or 0) for c, v in q.all() if v}
+
+
+def month_total_grouped(db: Session, family_id: Optional[int], record_type: str,
+                        ref: date = None) -> dict:
+    s, e = month_range(ref)
+    return sum_by_type_grouped(db, family_id, record_type, s, e)
+
+
+def today_expense_grouped(db: Session, family_id: Optional[int]) -> dict:
+    today = date.today()
+    return sum_by_type_grouped(db, family_id, "expense", today, today)

@@ -6,6 +6,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import Family
 from app.services import record_service, family_service, account_service
+from app.utils import fx
 from app.routers.auth import get_optional_user
 
 router = APIRouter()
@@ -21,11 +22,20 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=303)
     family_id = user.family_id
     fam = db.query(Family).get(family_id)
-    inc = record_service.month_total(db, family_id, "income")
-    exp = record_service.month_total(db, family_id, "expense")
-    sav = record_service.month_total(db, family_id, "savings")
-    rate = record_service.savings_rate(db, family_id)
-    today = record_service.today_expense(db, family_id)
+    base_cur = fam.default_currency if fam else "MYR"
+
+    # Grouped per currency, then converted to family default for the cards.
+    inc_g = record_service.month_total_grouped(db, family_id, "income")
+    exp_g = record_service.month_total_grouped(db, family_id, "expense")
+    sav_g = record_service.month_total_grouped(db, family_id, "savings")
+    today_g = record_service.today_expense_grouped(db, family_id)
+    inc = fx.convert_grouped(inc_g, base_cur)
+    exp = fx.convert_grouped(exp_g, base_cur)
+    sav = fx.convert_grouped(sav_g, base_cur)
+    today = fx.convert_grouped(today_g, base_cur)
+    rate = round((sav / inc * 100), 2) if inc > 0 else 0.0
+    # Whether totals are mixed-currency (drives the "converted" footnote)
+    has_fx = any(len(g) > 1 or (g and base_cur not in g) for g in (inc_g, exp_g, sav_g, today_g))
     cat = record_service.category_breakdown(db, family_id)
     cat_sorted = sorted(cat, key=lambda x: x[1], reverse=True)
     top_cat = cat_sorted[0] if cat_sorted else ("-", 0)
@@ -52,5 +62,9 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "categories": cat_sorted,
             "enrollments": enrollments,
             "account_balances": account_balances,
+            "has_fx": has_fx,
+            "income_by_cur": inc_g,
+            "expense_by_cur": exp_g,
+            "savings_by_cur": sav_g,
         },
     )
