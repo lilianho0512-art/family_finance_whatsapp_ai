@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Admin — Family Finance AI</title>
@@ -23,16 +23,16 @@
   <div class="row g-3 mb-4">
     <div class="col"><div class="card text-bg-primary"><div class="card-body"><h6>Families</h6><h3>{{ fam_stats|length }}</h3></div></div></div>
     <div class="col"><div class="card text-bg-success"><div class="card-body"><h6>Users</h6><h3>{{ user_count }}</h3></div></div></div>
-    <div class="col"><div class="card text-bg-info"><div class="card-body"><h6>WhatsApp 号</h6><h3>{{ enrollment_count }}</h3></div></div></div>
+    <div class="col"><div class="card text-bg-info"><div class="card-body"><h6>WhatsApp numbers</h6><h3>{{ enrollment_count }}</h3></div></div></div>
     <div class="col"><div class="card text-bg-warning"><div class="card-body"><h6>Records</h6><h3>{{ record_count }}</h3></div></div></div>
     <div class="col"><div class="card text-bg-danger"><div class="card-body"><h6>Bug Logs</h6><h3>{{ bug_count }}</h3></div></div></div>
   </div>
 
-  <h4>所有家庭</h4>
+  <h4>All families</h4>
   <table class="table table-striped">
     <thead><tr>
-      <th>ID</th><th>名称</th><th>创建时间</th><th>用户</th><th>WhatsApp 号</th>
-      <th>记录数</th><th class="text-end">已完成总额 (RM)</th><th></th>
+      <th>ID</th><th>Name</th><th>Created</th><th>Users</th><th>WhatsApp numbers</th>
+      <th>Records</th><th class="text-end">Completed total (RM)</th><th></th>
     </tr></thead>
     <tbody>
     {% for s in fam_stats %}
@@ -44,17 +44,17 @@
         <td>{{ s.enrollments }}</td>
         <td>{{ s.records }}</td>
         <td class="text-end">{{ "%.2f"|format(s.total) }}</td>
-        <td><a class="btn btn-sm btn-outline-primary" href="/admin/family/{{ s.family.id }}">详情</a></td>
+        <td><a class="btn btn-sm btn-outline-primary" href="/admin/family/{{ s.family.id }}">Details</a></td>
       </tr>
     {% else %}
-      <tr><td colspan="8" class="text-muted">暂无家庭</td></tr>
+      <tr><td colspan="8" class="text-muted">No families yet</td></tr>
     {% endfor %}
     </tbody>
   </table>
 
-  <h4 class="mt-4">最近 Bug Logs (10)</h4>
+  <h4 class="mt-4">Recent Bug Logs (10)</h4>
   <table class="table table-sm">
-    <thead><tr><th>时间</th><th>类型</th><th>函数</th><th>消息</th></tr></thead>
+    <thead><tr><th>Time</th><th>Type</th><th>Function</th><th>Message</th></tr></thead>
     <tbody>
     {% for b in recent_bugs %}
       <tr>
@@ -64,11 +64,11 @@
         <td><small>{{ (b.error_message or '')[:120] }}</small></td>
       </tr>
     {% else %}
-      <tr><td colspan="4" class="text-muted">暂无错误日志 ✅</td></tr>
+      <tr><td colspan="4" class="text-muted">No error logs ✅</td></tr>
     {% endfor %}
     </tbody>
   </table>
-  <a class="btn btn-sm btn-outline-secondary" href="/admin/bugs">查看全部 →</a>
+  <a class="btn btn-sm btn-outline-secondary" href="/admin/bugs">View all →</a>
 </div>
 </body>
 </html>

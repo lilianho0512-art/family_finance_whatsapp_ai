@@ -10,13 +10,13 @@ def monthly_summary_text(db: Session, family_id: Optional[int]) -> str:
     sav = record_service.month_total(db, family_id, "savings")
     rate = record_service.savings_rate(db, family_id)
     return (
-        "📊 本月总结\n"
-        f"收入：{format_money(inc)}\n"
-        f"开销：{format_money(exp)}\n"
-        f"储蓄：{format_money(sav)}\n"
-        f"储蓄率：{rate}%"
+        "📊 This month's summary\n"
+        f"Income: {format_money(inc)}\n"
+        f"Expenses: {format_money(exp)}\n"
+        f"Savings: {format_money(sav)}\n"
+        f"Savings rate: {rate}%"
     )
 
 
 def daily_summary_text(db: Session, family_id: Optional[int]) -> str:
-    return f"📅 今天开销：{format_money(record_service.today_expense(db, family_id))}"
+    return f"📅 Today's expenses: {format_money(record_service.today_expense(db, family_id))}"

@@ -5,7 +5,7 @@ from app.utils.logger import logger
 from app.services import rule_parser
 
 SYSTEM_PROMPT = (
-    "You are a strict JSON extractor for Malaysian family finance WhatsApp messages. "
+    "You are a strict JSON extractor for English-language family finance WhatsApp messages (Malaysian context). "
     "Output ONLY a JSON object — no markdown, no explanation, no code fences.\n"
     "Schema:\n"
     "{\n"
@@ -78,7 +78,6 @@ def parse_with_gemini(text: str):
 
 
 _DATE_KEYWORDS = (
-    "今天", "今日", "昨天", "昨日", "明天", "明日",
     "today", "yesterday", "tomorrow",
 )
 _DATE_PATTERN_RE = __import__("re").compile(r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}|\b\d{1,2}[-/]\d{1,2}\b")
@@ -89,7 +88,7 @@ def _normalize(parsed, fallback_text: str) -> dict:
     if not parsed or not isinstance(parsed, dict):
         return rule
     out = dict(rule)
-    # rule_parser is high-precision on explicit keywords (存钱/工资/今天/...) and on
+    # rule_parser is high-precision on explicit keywords (save/salary/today/...) and on
     # RM-prefixed amounts. Trust it over the LLM for those, otherwise let AI fill gaps.
     rule_explicit_type = (rule.get("record_type") or "unknown") != "unknown"
     rule_has_amount = float(rule.get("amount") or 0) > 0

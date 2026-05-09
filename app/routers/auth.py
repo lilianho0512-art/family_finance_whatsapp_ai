@@ -73,7 +73,7 @@ def login(
     if not user or not auth_service.verify_password(password, user.password_hash):
         return templates.TemplateResponse(
             "login.html",
-            {"request": request, "error": "邮箱或密码错误"},
+            {"request": request, "error": "Invalid email or password"},
             status_code=401,
         )
     token = auth_service.create_token(user.id, user.family_id)
@@ -101,13 +101,13 @@ def register(
     if not email or len(password) < 6:
         return templates.TemplateResponse(
             "register.html",
-            {"request": request, "error": "邮箱不可空，密码至少 6 位"},
+            {"request": request, "error": "Email is required, and the password must be at least 6 characters."},
             status_code=400,
         )
     if auth_service.get_user_by_email(db, email):
         return templates.TemplateResponse(
             "register.html",
-            {"request": request, "error": "邮箱已注册"},
+            {"request": request, "error": "This email is already registered"},
             status_code=409,
         )
     if whatsapp_number.strip():
@@ -119,7 +119,7 @@ def register(
         if existing:
             return templates.TemplateResponse(
                 "register.html",
-                {"request": request, "error": "该 WhatsApp 号已绑定其他家庭"},
+                {"request": request, "error": "That WhatsApp number is already linked to another family"},
                 status_code=409,
             )
     fam, user = family_service.create_family_with_admin(
@@ -186,7 +186,7 @@ def add_whatsapp(
     )
     if existing:
         if existing.family_id != user.family_id:
-            raise HTTPException(status_code=409, detail="号码已绑定其他家庭")
+            raise HTTPException(status_code=409, detail="number already linked to another family")
         return JSONResponse({"status": "already_enrolled", "id": existing.id})
     enr = family_service.add_whatsapp_number(
         db, family_id=user.family_id, whatsapp_number=number, user_id=user.id, label=label

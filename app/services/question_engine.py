@@ -1,12 +1,12 @@
 from typing import Optional, Tuple
 
 RECORD_TYPE_QUESTION = (
-    "请选择这笔记录类型：\n"
-    "A. 家庭开销\n"
-    "B. 家庭储蓄\n"
-    "C. 家庭收入\n"
-    "D. 转账\n"
-    "E. 其他"
+    "Pick a record type:\n"
+    "A. Family expense\n"
+    "B. Family savings\n"
+    "C. Family income\n"
+    "D. Transfer\n"
+    "E. Other"
 )
 RECORD_TYPE_OPTIONS = {
     "A": "expense",
@@ -17,16 +17,16 @@ RECORD_TYPE_OPTIONS = {
 }
 
 CATEGORY_QUESTION = (
-    "请选择开销分类：\n"
-    "A. Groceries 买菜/日用品\n"
-    "B. Food 外食\n"
-    "C. Baby 小孩用品\n"
-    "D. Utilities 水电网\n"
-    "E. Petrol 油费\n"
-    "F. Medical 医疗\n"
-    "G. Education 教育\n"
-    "H. Online Shopping 网购\n"
-    "I. Others 其他"
+    "Pick an expense category:\n"
+    "A. Groceries\n"
+    "B. Food\n"
+    "C. Baby\n"
+    "D. Utilities\n"
+    "E. Petrol\n"
+    "F. Medical\n"
+    "G. Education\n"
+    "H. Online Shopping\n"
+    "I. Others"
 )
 CATEGORY_OPTIONS = {
     "A": "Groceries",
@@ -41,7 +41,7 @@ CATEGORY_OPTIONS = {
 }
 
 PAYMENT_QUESTION = (
-    "请选择付款方式：\n"
+    "Pick a payment method:\n"
     "A. Cash\n"
     "B. Credit Card\n"
     "C. Debit Card\n"
@@ -86,22 +86,22 @@ _ACCOUNT_LIST_TEXT = (
     "J. Other"
 )
 
-ACCOUNT_QUESTION_EXPENSE = "请选择账户（这笔开销从哪个银行/钱包扣）：\n" + _ACCOUNT_LIST_TEXT
-ACCOUNT_QUESTION_INCOME = "请选择账户（这笔收入进哪个银行）：\n" + _ACCOUNT_LIST_TEXT
-ACCOUNT_QUESTION_SAVINGS = "请选择储蓄账户（这笔储蓄存到哪个银行）：\n" + _ACCOUNT_LIST_TEXT
+ACCOUNT_QUESTION_EXPENSE = "Pick an account (which bank/wallet this expense came out of):\n" + _ACCOUNT_LIST_TEXT
+ACCOUNT_QUESTION_INCOME = "Pick an account (which bank received this income):\n" + _ACCOUNT_LIST_TEXT
+ACCOUNT_QUESTION_SAVINGS = "Pick a savings account (which bank this savings goes into):\n" + _ACCOUNT_LIST_TEXT
 
 # Backward-compatible aliases (older code still referenced these names)
 SAVINGS_SOURCE_QUESTION = ACCOUNT_QUESTION_SAVINGS
 SAVINGS_SOURCE_OPTIONS = ACCOUNT_OPTIONS
 
 INCOME_SOURCE_QUESTION = (
-    "请选择收入来源：\n"
-    "A. Salary 工资\n"
-    "B. Bonus 奖金\n"
-    "C. Freelance 兼职\n"
-    "D. Business 生意\n"
-    "E. Investment 投资\n"
-    "F. Gift 礼金\n"
+    "Pick an income source:\n"
+    "A. Salary\n"
+    "B. Bonus\n"
+    "C. Freelance\n"
+    "D. Business\n"
+    "E. Investment\n"
+    "F. Gift\n"
     "G. Other"
 )
 INCOME_SOURCE_OPTIONS = {

@@ -11,32 +11,32 @@ from app.utils.money_tools import extract_amount
 
 def test_greeting():
     assert menu_service.is_greeting("Hi")
-    assert menu_service.is_greeting("你好")
+    assert menu_service.is_greeting("hello")
     assert menu_service.is_greeting("Menu")
-    assert not menu_service.is_greeting("今天 Tesco RM88")
+    assert not menu_service.is_greeting("Today Tesco RM88")
 
 
 def test_rule_parse_expense():
-    r = rule_parser.parse("今天 Tesco RM88")
+    r = rule_parser.parse("Today Tesco RM88")
     assert r["amount"] == 88.0
     assert r["merchant"].lower() == "tesco"
 
 
 def test_rule_parse_savings():
-    r = rule_parser.parse("今天存钱 RM500")
+    r = rule_parser.parse("Today saved RM500")
     assert r["record_type"] == "savings"
     assert r["amount"] == 500.0
 
 
 def test_rule_parse_income():
-    r = rule_parser.parse("工资 RM3800")
+    r = rule_parser.parse("Salary RM3800")
     assert r["record_type"] == "income"
     assert r["amount"] == 3800.0
     assert r["source"] == "Salary"
 
 
 def test_rule_parse_groceries():
-    r = rule_parser.parse("今天买菜 RM35")
+    r = rule_parser.parse("Today groceries RM35")
     assert r["amount"] == 35.0
     assert r["category"] == "Groceries"
 
@@ -44,7 +44,7 @@ def test_rule_parse_groceries():
 def test_extract_amount():
     assert extract_amount("RM 88.50") == 88.5
     assert extract_amount("MYR123") == 123.0
-    assert extract_amount("总共 99 元") == 99.0
+    assert extract_amount("Total 99") == 99.0
 
 
 def test_extract_json_from_markdown():

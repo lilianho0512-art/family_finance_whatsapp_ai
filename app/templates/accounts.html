@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Accounts — Family Finance AI</title>
@@ -22,15 +22,15 @@
   </div>
 </nav>
 <div class="container">
-  <h3>各账户余额（计算）</h3>
+  <h3>Account balances (computed)</h3>
   <p class="text-muted small">
-    计算公式：最新快照 + 之后的收入 − 之后的开销 + 之后存进该账户的储蓄
+    Formula: latest snapshot + income since + savings since − expenses since
   </p>
   <table class="table table-striped">
     <thead><tr>
-      <th>账户</th><th class="text-end">最新快照</th><th>快照日期</th>
-      <th class="text-end">+收入</th><th class="text-end">−开销</th><th class="text-end">+储蓄</th>
-      <th class="text-end">当前计算余额</th>
+      <th>Account</th><th class="text-end">Latest snapshot</th><th>Snapshot date</th>
+      <th class="text-end">+Income</th><th class="text-end">−Expenses</th><th class="text-end">+Savings</th>
+      <th class="text-end">Current computed balance</th>
     </tr></thead>
     <tbody>
     {% for r in rows %}
@@ -44,59 +44,59 @@
         <td class="text-end"><strong>RM {{ "%.2f"|format(r.computed_balance) }}</strong></td>
       </tr>
     {% else %}
-      <tr><td colspan="7" class="text-muted">还没账户。先在下面注册或添加余额快照。</td></tr>
+      <tr><td colspan="7" class="text-muted">No accounts yet. Register one below or add a balance snapshot.</td></tr>
     {% endfor %}
     </tbody>
   </table>
 
   <div class="row g-4 mt-2">
     <div class="col-md-6">
-      <h5>添加余额快照（手动 reconcile）</h5>
+      <h5>Add balance snapshot (manual reconcile)</h5>
       <form method="post" action="/accounts/snapshot" class="row g-2">
         <div class="col-12">
-          <label class="form-label">账户名</label>
+          <label class="form-label">Account name</label>
           <input class="form-control form-control-sm" name="account_name" list="account-list" required>
           <datalist id="account-list">
             {% for a in accounts %}<option value="{{ a.name }}">{% endfor %}
           </datalist>
         </div>
         <div class="col-6">
-          <label class="form-label">余额 (RM)</label>
+          <label class="form-label">Balance (RM)</label>
           <input type="number" step="0.01" class="form-control form-control-sm" name="balance" required>
         </div>
         <div class="col-6">
-          <label class="form-label">日期</label>
+          <label class="form-label">Date</label>
           <input type="date" class="form-control form-control-sm" name="as_of_date" value="{{ today }}">
         </div>
         <div class="col-12">
-          <label class="form-label">备注（可选）</label>
-          <input class="form-control form-control-sm" name="note" placeholder="月初对账">
+          <label class="form-label">Note (optional)</label>
+          <input class="form-control form-control-sm" name="note" placeholder="Start-of-month reconcile">
         </div>
-        <div class="col-12"><button class="btn btn-primary btn-sm" type="submit">保存快照</button></div>
+        <div class="col-12"><button class="btn btn-primary btn-sm" type="submit">Save snapshot</button></div>
       </form>
     </div>
 
     <div class="col-md-6">
-      <h5>注册新账户</h5>
+      <h5>Register new account</h5>
       <form method="post" action="/accounts/add" class="row g-2">
         <div class="col-12">
           <input class="form-control form-control-sm" name="name" placeholder="OCBC / Maybank Joint" required>
         </div>
         <div class="col-12">
-          <input class="form-control form-control-sm" name="note" placeholder="备注（可选）">
+          <input class="form-control form-control-sm" name="note" placeholder="Note (optional)">
         </div>
-        <div class="col-12"><button class="btn btn-success btn-sm" type="submit">注册</button></div>
+        <div class="col-12"><button class="btn btn-success btn-sm" type="submit">Register</button></div>
       </form>
 
-      <h6 class="mt-4">已注册账户</h6>
+      <h6 class="mt-4">Registered accounts</h6>
       <table class="table table-sm">
         {% for a in accounts %}
           <tr>
             <td>{{ a.name }}{% if a.note %} <small class="text-muted">— {{ a.note }}</small>{% endif %}</td>
             <td>
               <form method="post" action="/accounts/{{ a.id }}/delete" class="d-inline"
-                    onsubmit="return confirm('停用账户 {{ a.name }}？现有记录不变。');">
-                <button class="btn btn-sm btn-outline-danger" type="submit">停用</button>
+                    onsubmit="return confirm('Disable account {{ a.name }}? Existing records remain.');">
+                <button class="btn btn-sm btn-outline-danger" type="submit">Disable</button>
               </form>
             </td>
           </tr>
@@ -105,9 +105,9 @@
     </div>
   </div>
 
-  <h5 class="mt-4">最近 30 条快照</h5>
+  <h5 class="mt-4">Recent 30 snapshots</h5>
   <table class="table table-sm">
-    <thead><tr><th>日期</th><th>账户</th><th class="text-end">余额</th><th>备注</th><th></th></tr></thead>
+    <thead><tr><th>Date</th><th>Account</th><th class="text-end">Balance</th><th>Note</th><th></th></tr></thead>
     <tbody>
     {% for s in snapshots %}
       <tr>
@@ -117,13 +117,13 @@
         <td><small>{{ s.note or '' }}</small></td>
         <td>
           <form method="post" action="/accounts/snapshot/{{ s.id }}/delete" class="d-inline"
-                onsubmit="return confirm('删除此快照？');">
-            <button class="btn btn-sm btn-outline-danger" type="submit">删除</button>
+                onsubmit="return confirm('Delete this snapshot?');">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
           </form>
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="5" class="text-muted">尚无快照</td></tr>
+      <tr><td colspan="5" class="text-muted">No snapshots yet</td></tr>
     {% endfor %}
     </tbody>
   </table>

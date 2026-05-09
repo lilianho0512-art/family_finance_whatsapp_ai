@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Family Finance — Reports</title>
@@ -19,18 +19,18 @@
   </div>
 </nav>
 <div class="container">
-  <h3>本月报告</h3>
+  <h3>This month's report</h3>
   <ul class="list-group mb-4">
-    <li class="list-group-item d-flex justify-content-between"><span>本月收入</span><span>RM {{ "%.2f"|format(income) }}</span></li>
-    <li class="list-group-item d-flex justify-content-between"><span>本月开销</span><span>RM {{ "%.2f"|format(expense) }}</span></li>
-    <li class="list-group-item d-flex justify-content-between"><span>本月储蓄</span><span>RM {{ "%.2f"|format(savings) }}</span></li>
-    <li class="list-group-item d-flex justify-content-between"><span>储蓄率</span><span>{{ rate }}%</span></li>
-    <li class="list-group-item d-flex justify-content-between"><span>净现金流</span><span>RM {{ "%.2f"|format(income - expense - savings) }}</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Income (this month)</span><span>RM {{ "%.2f"|format(income) }}</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Expenses (this month)</span><span>RM {{ "%.2f"|format(expense) }}</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Savings (this month)</span><span>RM {{ "%.2f"|format(savings) }}</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Savings rate</span><span>{{ rate }}%</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Net cash flow</span><span>RM {{ "%.2f"|format(income - expense - savings) }}</span></li>
   </ul>
 
-  <h4>分类支出</h4>
+  <h4>Spending by category</h4>
   <table class="table">
-    <thead><tr><th>分类</th><th class="text-end">支出</th><th>占比</th></tr></thead>
+    <thead><tr><th>Category</th><th class="text-end">Spent</th><th>Share</th></tr></thead>
     <tbody>
       {% set total = expense if expense > 0 else 1 %}
       {% for c, v in categories %}
@@ -47,12 +47,12 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="3" class="text-muted">暂无数据</td></tr>
+        <tr><td colspan="3" class="text-muted">No data yet</td></tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <a class="btn btn-warning" href="/export/monthly">下载 Excel 月报</a>
+  <a class="btn btn-warning" href="/export/monthly">Download Excel monthly report</a>
 </div>
 </body>
 </html>

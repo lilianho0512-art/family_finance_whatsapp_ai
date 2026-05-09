@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Admin — Bug Logs</title>
@@ -17,11 +17,11 @@
   </div>
 </nav>
 <div class="container">
-  <h4>Bug Logs（最近 200 条）</h4>
+  <h4>Bug Logs (last 200)</h4>
   <table class="table table-striped table-sm">
     <thead><tr>
-      <th>时间</th><th>类型</th><th>文件</th><th>函数</th>
-      <th>家庭</th><th>消息</th><th>已修复</th>
+      <th>Time</th><th>Type</th><th>File</th><th>Function</th>
+      <th>Family</th><th>Message</th><th>Auto-fixed</th>
     </tr></thead>
     <tbody>
     {% for b in bugs %}
@@ -35,7 +35,7 @@
         <td>{% if b.auto_fixed %}<span class="badge bg-success">auto</span>{% else %}-{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="7" class="text-muted">暂无错误日志 ✅</td></tr>
+      <tr><td colspan="7" class="text-muted">No error logs ✅</td></tr>
     {% endfor %}
     </tbody>
   </table>

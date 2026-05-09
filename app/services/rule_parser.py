@@ -2,48 +2,49 @@ import re
 from app.utils.date_tools import parse_date
 from app.utils.money_tools import extract_amount
 
-# Explicit type markers — highest priority. If user (or our own confirmation
-# message echoed back) writes 家庭开销/家庭储蓄/家庭收入/家庭转账 we lock that in.
+# Explicit type markers — highest priority. If the user (or our own confirmation
+# message echoed back) says "family expense" / "family savings" / etc., we lock
+# that in as the record type.
 EXPLICIT_TYPE_PREFIXES = [
-    ("expense",  ["家庭开销", "家用开销"]),
-    ("savings",  ["家庭储蓄", "家用储蓄"]),
-    ("income",   ["家庭收入", "家用收入"]),
-    ("transfer", ["家庭转账", "家用转账"]),
+    ("expense",  ["family expense"]),
+    ("savings",  ["family savings"]),
+    ("income",   ["family income"]),
+    ("transfer", ["family transfer"]),
 ]
 
 EXPENSE_KEYWORDS = [
-    "买菜", "菜市", "超市", "买", "花了", "花掉", "外食", "开销",
     "lunch", "dinner", "breakfast", "groceries", "petrol", "fuel", "shopping",
+    "spent", "expense", "bought", "buy",
 ]
-SAVINGS_KEYWORDS = ["存钱", "储蓄", "save", "savings", "deposit"]
-INCOME_KEYWORDS = ["工资", "薪水", "薪资", "奖金", "salary", "bonus", "income", "收入", "freelance"]
+SAVINGS_KEYWORDS = ["save", "saved", "savings", "deposit"]
+INCOME_KEYWORDS = ["salary", "bonus", "income", "freelance"]
 # Note: bare "transfer" intentionally NOT listed — it's a payment method too
 # (Bank Transfer / Online Transfer). Standalone 'transfer' is matched via regex below.
-TRANSFER_KEYWORDS = ["转账", "汇款", "duitnow"]
+TRANSFER_KEYWORDS = ["duitnow", "remittance"]
 TRANSFER_STANDALONE_RE = re.compile(
     r"(?<!bank\s)(?<!wire\s)(?<!online\s)(?<!money\s)\btransfer\b",
     re.IGNORECASE,
 )
 
 CATEGORY_HINTS = {
-    "Groceries": ["groceries", "买菜", "tesco", "aeon", "lotus", "mydin", "giant", "village grocer", "jaya grocer", "ben's", "日用品"],
-    "Food": ["food", "lunch", "dinner", "breakfast", "外食", "mamak", "restaurant", "kfc", "mcdonald", "starbucks", "kopitiam", "饭", "吃"],
-    "Baby": ["baby", "diaper", "尿布", "奶粉", "milk powder", "stroller", "小孩"],
-    "Utilities": ["utilities", "tnb", "syabas", "indah water", "unifi", "maxis", "celcom", "digi", "water bill", "electric", "水费", "电费", "网费"],
-    "Petrol": ["petrol", "petron", "shell", "petronas", "caltex", "bhpetrol", "fuel", "油费"],
-    "Medical": ["medical", "clinic", "hospital", "pharmacy", "guardian", "watson", "诊所", "医院", "药"],
-    "Education": ["education", "tuition", "school", "学费", "tadika", "kindergarten", "课"],
-    "Online Shopping": ["online shopping", "shopee", "lazada", "amazon", "tiktok shop", "网购"],
-    "Others": ["others", "其他"],
+    "Groceries": ["groceries", "tesco", "aeon", "lotus", "mydin", "giant", "village grocer", "jaya grocer", "ben's"],
+    "Food": ["food", "lunch", "dinner", "breakfast", "mamak", "restaurant", "kfc", "mcdonald", "starbucks", "kopitiam"],
+    "Baby": ["baby", "diaper", "milk powder", "stroller"],
+    "Utilities": ["utilities", "tnb", "syabas", "indah water", "unifi", "maxis", "celcom", "digi", "water bill", "electric"],
+    "Petrol": ["petrol", "petron", "shell", "petronas", "caltex", "bhpetrol", "fuel"],
+    "Medical": ["medical", "clinic", "hospital", "pharmacy", "guardian", "watson"],
+    "Education": ["education", "tuition", "school", "tadika", "kindergarten"],
+    "Online Shopping": ["online shopping", "shopee", "lazada", "amazon", "tiktok shop"],
+    "Others": ["others"],
 }
 
 PAYMENT_HINTS = {
     "Touch n Go": ["tng", "touch n go", "touch'n go", "tngo"],
-    "Credit Card": ["credit card", "cc", "信用卡"],
-    "Debit Card": ["debit card", "debit", "借记卡"],
+    "Credit Card": ["credit card", "cc"],
+    "Debit Card": ["debit card", "debit"],
     "DuitNow": ["duitnow"],
-    "Bank Transfer": ["transfer", "fpx", "online banking", "ibanking", "网上银行"],
-    "Cash": ["cash", "现金"],
+    "Bank Transfer": ["transfer", "fpx", "online banking", "ibanking"],
+    "Cash": ["cash"],
 }
 
 COMMON_MERCHANTS = [
@@ -59,19 +60,19 @@ MERCHANT_RE = re.compile(r"\b([A-Z][A-Za-z0-9&'\-]{1,30}(?:\s+[A-Z][A-Za-z0-9&'\
 def detect_record_type(text: str) -> str:
     if not text:
         return "unknown"
-    # 1. Explicit "家庭X" type markers — highest priority, can't be overridden
+    t = text.lower()
+    # 1. Explicit "family X" type markers — highest priority, can't be overridden
     for rtype, hints in EXPLICIT_TYPE_PREFIXES:
         for h in hints:
-            if h in text:
+            if h in t:
                 return rtype
-    t = text.lower()
     for kw in SAVINGS_KEYWORDS:
         if kw.lower() in t:
             return "savings"
     for kw in INCOME_KEYWORDS:
         if kw.lower() in t:
             return "income"
-    # 2. TRANSFER — only via 转账/汇款/duitnow OR a standalone "transfer" word
+    # 2. TRANSFER — only via duitnow/remittance OR a standalone "transfer" word
     #    (NOT "Bank Transfer" / "Online Transfer" — those are payment methods)
     for kw in TRANSFER_KEYWORDS:
         if kw.lower() in t:
@@ -123,11 +124,11 @@ def detect_merchant(text: str) -> str:
 
 def detect_income_source(text: str) -> str:
     t = (text or "").lower()
-    if "工资" in t or "薪水" in t or "薪资" in t or "salary" in t:
+    if "salary" in t:
         return "Salary"
-    if "奖金" in t or "bonus" in t:
+    if "bonus" in t:
         return "Bonus"
-    if "freelance" in t or "兼职" in t:
+    if "freelance" in t:
         return "Freelance"
     return ""
 

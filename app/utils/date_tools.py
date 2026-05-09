@@ -2,9 +2,9 @@ import re
 from datetime import date, timedelta
 from dateutil import parser as dateutil_parser
 
-CN_TODAY = ["今天", "今日", "today"]
-CN_YESTERDAY = ["昨天", "昨日", "yesterday"]
-CN_TOMORROW = ["明天", "明日", "tomorrow"]
+RELATIVE_TODAY = ["today"]
+RELATIVE_YESTERDAY = ["yesterday"]
+RELATIVE_TOMORROW = ["tomorrow"]
 
 
 def parse_date(text, fallback: date = None) -> date:
@@ -18,13 +18,13 @@ def parse_date(text, fallback: date = None) -> date:
     if not text:
         return fallback
     low = text.lower()
-    for kw in CN_TODAY:
+    for kw in RELATIVE_TODAY:
         if kw in low:
             return date.today()
-    for kw in CN_YESTERDAY:
+    for kw in RELATIVE_YESTERDAY:
         if kw in low:
             return date.today() - timedelta(days=1)
-    for kw in CN_TOMORROW:
+    for kw in RELATIVE_TOMORROW:
         if kw in low:
             return date.today() + timedelta(days=1)
     m = re.search(r"(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})", text)

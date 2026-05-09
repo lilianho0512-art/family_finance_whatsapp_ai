@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Family Finance Dashboard</title>
@@ -26,22 +26,22 @@
 </nav>
 <div class="container">
   <div class="row g-3">
-    <div class="col-md-3"><div class="card text-bg-success"><div class="card-body"><h6>本月收入</h6><h3>RM {{ "%.2f"|format(income) }}</h3></div></div></div>
-    <div class="col-md-3"><div class="card text-bg-danger"><div class="card-body"><h6>本月开销</h6><h3>RM {{ "%.2f"|format(expense) }}</h3></div></div></div>
-    <div class="col-md-3"><div class="card text-bg-info"><div class="card-body"><h6>本月储蓄</h6><h3>RM {{ "%.2f"|format(savings) }}</h3></div></div></div>
-    <div class="col-md-3"><div class="card text-bg-warning"><div class="card-body"><h6>储蓄率</h6><h3>{{ rate }}%</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-bg-success"><div class="card-body"><h6>Income (this month)</h6><h3>RM {{ "%.2f"|format(income) }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-bg-danger"><div class="card-body"><h6>Expenses (this month)</h6><h3>RM {{ "%.2f"|format(expense) }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-bg-info"><div class="card-body"><h6>Savings (this month)</h6><h3>RM {{ "%.2f"|format(savings) }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-bg-warning"><div class="card-body"><h6>Savings rate</h6><h3>{{ rate }}%</h3></div></div></div>
   </div>
 
   <div class="row g-3 mt-1">
-    <div class="col-md-3"><div class="card"><div class="card-body"><h6>今日开销</h6><h4>RM {{ "%.2f"|format(today) }}</h4></div></div></div>
-    <div class="col-md-3"><div class="card"><div class="card-body"><h6>最大开销分类</h6><h5>{{ top_cat[0] }}</h5><small>RM {{ "%.2f"|format(top_cat[1]) }}</small></div></div></div>
-    <div class="col-md-3"><div class="card"><div class="card-body"><h6>需要补充</h6><h4>{{ need_q }}</h4><small><a href="/records?status=need_question">查看 need_question</a></small></div></div></div>
-    <div class="col-md-3"><div class="card"><div class="card-body"><h6>需要审核</h6><h4>{{ need_r }}</h4><small><a href="/records?status=need_review">查看 need_review</a></small></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Today's expenses</h6><h4>RM {{ "%.2f"|format(today) }}</h4></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Top expense category</h6><h5>{{ top_cat[0] }}</h5><small>RM {{ "%.2f"|format(top_cat[1]) }}</small></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Needs follow-up</h6><h4>{{ need_q }}</h4><small><a href="/records?status=need_question">view need_question</a></small></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Needs review</h6><h4>{{ need_r }}</h4><small><a href="/records?status=need_review">view need_review</a></small></div></div></div>
   </div>
 
-  <h4 class="mt-4">WhatsApp 号码绑定</h4>
+  <h4 class="mt-4">WhatsApp number bindings</h4>
   <table class="table table-sm">
-    <thead><tr><th>号码</th><th>标签</th><th>添加时间</th><th></th></tr></thead>
+    <thead><tr><th>Number</th><th>Label</th><th>Added</th><th></th></tr></thead>
     <tbody>
     {% for e in enrollments %}
       <tr>
@@ -50,12 +50,12 @@
         <td>{{ e.created_at.strftime('%Y-%m-%d') }}</td>
         <td>
           <form method="post" action="/auth/whatsapp/{{ e.id }}" onsubmit="event.preventDefault(); fetch(this.action, {method: 'DELETE'}).then(()=>location.reload());" class="d-inline">
-            <button class="btn btn-sm btn-outline-danger" type="submit">删除</button>
+            <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
           </form>
         </td>
       </tr>
     {% else %}
-      <tr><td colspan="4" class="text-muted">尚未绑定 — 在下方添加：</td></tr>
+      <tr><td colspan="4" class="text-muted">No bindings yet — add one below:</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -65,15 +65,15 @@
                   fetch(this.action, {method:'POST', body:fd}).then(r=>r.json()).then(()=>location.reload());">
     <div class="col-auto"><input class="form-control form-control-sm" type="text" name="whatsapp_number" placeholder="60123456789" required></div>
     <div class="col-auto"><input class="form-control form-control-sm" type="text" name="label" placeholder="Dad / Mom"></div>
-    <div class="col-auto"><button class="btn btn-sm btn-primary" type="submit">添加 WhatsApp</button></div>
+    <div class="col-auto"><button class="btn btn-sm btn-primary" type="submit">Add WhatsApp</button></div>
   </form>
 
-  <h4 class="mt-4">各账户余额 <small class="text-muted fs-6">(<a href="/accounts">管理 / 加快照</a>)</small></h4>
+  <h4 class="mt-4">Account balances <small class="text-muted fs-6">(<a href="/accounts">manage / add snapshot</a>)</small></h4>
   <table class="table table-sm">
     <thead><tr>
-      <th>账户</th><th>快照日期</th><th class="text-end">快照</th>
-      <th class="text-end">+收</th><th class="text-end">−支</th><th class="text-end">+储</th>
-      <th class="text-end">当前</th>
+      <th>Account</th><th>Snapshot date</th><th class="text-end">Snapshot</th>
+      <th class="text-end">+Income</th><th class="text-end">−Expense</th><th class="text-end">+Savings</th>
+      <th class="text-end">Current</th>
     </tr></thead>
     <tbody>
     {% for r in account_balances %}
@@ -87,26 +87,26 @@
         <td class="text-end"><strong>RM {{ "%.2f"|format(r.computed_balance) }}</strong></td>
       </tr>
     {% else %}
-      <tr><td colspan="7" class="text-muted">尚无账户。<a href="/accounts">去添加</a> 或在 Telegram 发「设置 Maybank 5000」。</td></tr>
+      <tr><td colspan="7" class="text-muted">No accounts yet. <a href="/accounts">Add one</a> or send "set Maybank 5000" on Telegram.</td></tr>
     {% endfor %}
     </tbody>
   </table>
 
-  <h4 class="mt-4">分类支出</h4>
+  <h4 class="mt-4">Spending by category</h4>
   <table class="table table-sm">
-    <thead><tr><th>分类</th><th class="text-end">本月支出</th></tr></thead>
+    <thead><tr><th>Category</th><th class="text-end">This month</th></tr></thead>
     <tbody>
     {% for c, v in categories %}
       <tr><td>{{ c }}</td><td class="text-end">RM {{ "%.2f"|format(v) }}</td></tr>
     {% else %}
-      <tr><td colspan="2" class="text-muted">暂无数据</td></tr>
+      <tr><td colspan="2" class="text-muted">No data yet</td></tr>
     {% endfor %}
     </tbody>
   </table>
 
-  <h4 class="mt-4">最近 10 笔</h4>
+  <h4 class="mt-4">Recent 10 transactions</h4>
   <table class="table table-striped">
-    <thead><tr><th>日期</th><th>类型</th><th>商家</th><th>金额</th><th>分类</th><th>付款</th><th>状态</th></tr></thead>
+    <thead><tr><th>Date</th><th>Type</th><th>Merchant</th><th>Amount</th><th>Category</th><th>Payment</th><th>Status</th></tr></thead>
     <tbody>
     {% for r in recent %}
       <tr>
@@ -119,7 +119,7 @@
         <td><span class="badge bg-secondary">{{ r.status }}</span></td>
       </tr>
     {% else %}
-      <tr><td colspan="7" class="text-muted">暂无记录</td></tr>
+      <tr><td colspan="7" class="text-muted">No records yet</td></tr>
     {% endfor %}
     </tbody>
   </table>

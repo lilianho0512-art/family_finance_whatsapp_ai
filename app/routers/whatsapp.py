@@ -29,12 +29,12 @@ from app.utils.logger import logger
 
 router = APIRouter()
 
-TYPE_ZH = {
-    "expense": "家庭开销",
-    "savings": "家庭储蓄",
-    "income": "家庭收入",
-    "transfer": "转账",
-    "unknown": "其他",
+TYPE_LABEL = {
+    "expense": "Family expense",
+    "savings": "Family savings",
+    "income": "Family income",
+    "transfer": "Transfer",
+    "unknown": "Other",
 }
 
 
@@ -205,7 +205,7 @@ async def receive_webhook(request: Request, db: Session = Depends(get_db)):
                         try:
                             whatsapp_service.send_text(
                                 msg.get("from", ""),
-                                "系统暂时遇到问题，已记录此信息以便人工审核 ✏️\n请稍后再试，或回复 Hi 查看菜单。",
+                                "Something went wrong on our end. The message has been logged for review ✏️\nPlease try again, or reply Hi to see the menu.",
                             )
                         except Exception:
                             pass
@@ -226,16 +226,16 @@ def _onboarding_text(from_number: str = "") -> str:
     register_url = f"{base}/register"
     if settings.WHATSAPP_PROVIDER == "telegram":
         return (
-            "你好 👋 你还没绑定家庭。\n\n"
-            f"1) 打开注册页面：\n   {register_url}\n\n"
-            f"2) 在「WhatsApp 号码」一栏填这串数字（这是你的 Telegram ID）：\n   {from_number}\n\n"
-            "3) 完成后回这里发 /start 即可开始记账。"
+            "Hi 👋 You haven't linked a family yet.\n\n"
+            f"1) Open the registration page:\n   {register_url}\n\n"
+            f"2) In the \"WhatsApp number\" field, enter this number (it's your Telegram ID):\n   {from_number}\n\n"
+            "3) When done, send /start here to begin recording."
         )
     return (
-        "你好 👋 你的 WhatsApp 号码尚未绑定家庭。\n\n"
-        f"请打开 Dashboard 注册（创建家庭账户并绑定此号码）：\n   {register_url}\n\n"
-        "或让管理员在已有家庭中点击「添加 WhatsApp」绑定你的号码。\n"
-        "绑定后再回复 Hi 即可开始记账。"
+        "Hi 👋 Your WhatsApp number isn't linked to a family yet.\n\n"
+        f"Open the Dashboard to register (create a family account and link this number):\n   {register_url}\n\n"
+        "Or ask an admin in an existing family to click \"Add WhatsApp\" and link your number.\n"
+        "Once linked, reply Hi to start recording."
     )
 
 
@@ -278,7 +278,7 @@ def _handle_message(db: Session, msg: dict):
         if not text:
             whatsapp_service.send_text(
                 from_number,
-                "我已收到附件，但暂时未能识别文字。已标记为需要人工审核 ✏️\n请补充：商家、金额、类别。",
+                "Got the attachment, but I couldn't read any text from it. Marked for review ✏️\nPlease add: merchant, amount, category.",
             )
             record_service.create_record(
                 db,
@@ -294,16 +294,16 @@ def _handle_message(db: Session, msg: dict):
             )
             return
     elif msg_type == "audio":
-        whatsapp_service.send_text(from_number, "暂不支持语音消息，请发送文字、图片或 PDF。")
+        whatsapp_service.send_text(from_number, "Voice messages aren't supported yet. Please send text, an image, or a PDF.")
         return
     else:
         logger.info(f"Unsupported message type: {msg_type}")
-        whatsapp_service.send_text(from_number, "暂不支持此消息类型，请发送文字、图片或 PDF。")
+        whatsapp_service.send_text(from_number, "This message type isn't supported. Please send text, an image, or a PDF.")
         return
 
     text = (text or "").strip()
     if not text:
-        whatsapp_service.send_text(from_number, "我没看到内容，请重新发送。回复 Hi 查看菜单。")
+        whatsapp_service.send_text(from_number, "I didn't see any content. Please send it again, or reply Hi for the menu.")
         return
 
     # 1. greeting → menu
@@ -324,7 +324,7 @@ def _handle_message(db: Session, msg: dict):
             if value is None:
                 whatsapp_service.send_text(
                     from_number,
-                    f"未能识别你的选择「{text[:20]}」。请回复字母选项：\n\n{conv.current_question}",
+                    f"I couldn't recognise your choice \"{text[:20]}\". Please reply with the letter option:\n\n{conv.current_question}",
                 )
                 return
             field_map = {
@@ -368,13 +368,13 @@ def _handle_message(db: Session, msg: dict):
                 whatsapp_service.send_text(from_number, _render_confirmation(rec))
             return
 
-    # 3. delete commands (撤销 / 删除 #id)
+    # 3. delete commands (undo / delete #id)
     delete_reply = _try_handle_delete(db, family_id, from_number, text)
     if delete_reply is not None:
         whatsapp_service.send_text(from_number, delete_reply)
         return
 
-    # 3b. account / ledger commands (余额 / 设置 X 5000 / 加账户 X)
+    # 3b. account / ledger commands (balance / set X 5000 / add account X)
     account_reply = _try_handle_account_command(db, family_id, text)
     if account_reply is not None:
         whatsapp_service.send_text(from_number, account_reply)
@@ -433,37 +433,37 @@ def _handle_message(db: Session, msg: dict):
 
 
 def _render_recognition(rec) -> str:
-    lines = ["我识别到："]
+    lines = ["Here's what I picked up:"]
     if rec.merchant:
-        lines.append(f"商家：{rec.merchant}")
+        lines.append(f"Merchant: {rec.merchant}")
     if rec.amount:
-        lines.append(f"金额：{format_money(rec.amount, rec.currency or 'MYR')}")
+        lines.append(f"Amount: {format_money(rec.amount, rec.currency or 'MYR')}")
     if rec.category:
-        lines.append(f"分类：{rec.category}")
+        lines.append(f"Category: {rec.category}")
     if rec.date:
-        lines.append(f"日期：{rec.date.isoformat()}")
+        lines.append(f"Date: {rec.date.isoformat()}")
     return "\n".join(lines)
 
 
 def _render_confirmation(rec) -> str:
-    lines = ["已记录成功 ✅\n"]
-    lines.append(f"类型：{TYPE_ZH.get(rec.record_type, rec.record_type)}")
+    lines = ["Recorded ✅\n"]
+    lines.append(f"Type: {TYPE_LABEL.get(rec.record_type, rec.record_type)}")
     if rec.merchant:
-        lines.append(f"商家：{rec.merchant}")
-    lines.append(f"金额：{format_money(rec.amount or 0, rec.currency or 'MYR')}")
+        lines.append(f"Merchant: {rec.merchant}")
+    lines.append(f"Amount: {format_money(rec.amount or 0, rec.currency or 'MYR')}")
     if rec.category:
-        lines.append(f"分类：{rec.category}")
+        lines.append(f"Category: {rec.category}")
     if rec.payment_method:
-        lines.append(f"付款方式：{rec.payment_method}")
+        lines.append(f"Payment method: {rec.payment_method}")
     if rec.source:
-        lines.append(f"来源：{rec.source}")
+        lines.append(f"Source: {rec.source}")
     if rec.date:
-        lines.append(f"日期：{rec.date.isoformat()}")
+        lines.append(f"Date: {rec.date.isoformat()}")
     return "\n".join(lines)
 
 
-_UNDO_RE = re.compile(r"^\s*(/?undo|撤销|删除最近|删除上一笔)\s*$", re.IGNORECASE)
-_DELETE_BY_ID_RE = re.compile(r"^\s*(?:删除|/?del)\s*#?(\d+)\s*$", re.IGNORECASE)
+_UNDO_RE = re.compile(r"^\s*(?:/?undo|delete\s+last|delete\s+recent)\s*$", re.IGNORECASE)
+_DELETE_BY_ID_RE = re.compile(r"^\s*(?:delete|/?del)\s*#?(\d+)\s*$", re.IGNORECASE)
 
 
 def _try_handle_delete(db: Session, family_id, from_number: str, text: str):
@@ -476,7 +476,7 @@ def _try_handle_delete(db: Session, family_id, from_number: str, text: str):
             .first()
         )
         if rec is None:
-            return "没有可撤销的记录。"
+            return "Nothing to undo."
         snap = f"#{rec.id} {rec.merchant or rec.record_type} RM{rec.amount or 0:.2f} ({rec.date})"
         db.delete(rec)
         db.commit()
@@ -485,25 +485,25 @@ def _try_handle_delete(db: Session, family_id, from_number: str, text: str):
         conv = conversation_memory.get_conversation(db, from_number)
         if conv and conv.current_record_id == rec.id:
             conversation_memory.clear_conversation(db, from_number)
-        return f"已撤销最近一笔 ✅\n{snap}"
+        return f"Undid the last record ✅\n{snap}"
 
     m = _DELETE_BY_ID_RE.match(text or "")
     if m:
         rec_id = int(m.group(1))
         rec = db.query(FinancialRecord).get(rec_id)
         if rec is None or rec.family_id != family_id:
-            return f"找不到记录 #{rec_id}（或不属于你的家庭）"
+            return f"Couldn't find record #{rec_id} (or it's not in your family)."
         snap = f"#{rec.id} {rec.merchant or rec.record_type} RM{rec.amount or 0:.2f} ({rec.date})"
         db.delete(rec)
         db.commit()
-        return f"已删除 ✅\n{snap}"
+        return f"Deleted ✅\n{snap}"
 
     return None
 
 
-_BALANCE_LIST_RE = re.compile(r"^\s*(余额|balance)s?\s*$", re.IGNORECASE)
-_BALANCE_SET_RE = re.compile(r"^\s*(?:设置|set)\s+([A-Za-z一-龥][\w一-龥\s]{0,40}?)\s+(?:RM|MYR)?\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.IGNORECASE)
-_ADD_ACCOUNT_RE = re.compile(r"^\s*(?:加账户|add account)\s+(.+?)\s*$", re.IGNORECASE)
+_BALANCE_LIST_RE = re.compile(r"^\s*balance(?:s)?\s*$", re.IGNORECASE)
+_BALANCE_SET_RE = re.compile(r"^\s*set\s+([A-Za-z][\w\s]{0,40}?)\s+(?:RM|MYR)?\s*([0-9]+(?:\.[0-9]+)?)\s*$", re.IGNORECASE)
+_ADD_ACCOUNT_RE = re.compile(r"^\s*add\s+account\s+(.+?)\s*$", re.IGNORECASE)
 
 
 def _try_handle_account_command(db, family_id, text: str):
@@ -512,14 +512,14 @@ def _try_handle_account_command(db, family_id, text: str):
     if _BALANCE_LIST_RE.match(text or ""):
         rows = account_service.all_account_balances(db, family_id)
         if not rows:
-            return "还没有任何账户。\n用「加账户 Maybank」注册账户，或「设置 Maybank 5000」直接设个余额快照。"
-        lines = ["💰 各账户余额："]
+            return "No accounts yet.\nUse \"add account Maybank\" to register one, or \"set Maybank 5000\" to record a balance snapshot."
+        lines = ["💰 Account balances:"]
         for r in rows:
-            snap_str = f"快照 {r['snapshot_date']}" if r['snapshot_date'] else "未设快照"
+            snap_str = f"snapshot {r['snapshot_date']}" if r['snapshot_date'] else "no snapshot"
             lines.append(
                 f"\n• {r['account']} = {format_money(r['computed_balance'])}\n"
                 f"  ({snap_str} {format_money(r['snapshot_balance'])} "
-                f"+收{r['income_since']:.0f} -支{r['expense_since']:.0f} +存{r['savings_since']:.0f})"
+                f"+inc {r['income_since']:.0f} -exp {r['expense_since']:.0f} +sav {r['savings_since']:.0f})"
             )
         return "\n".join(lines)
 
@@ -528,27 +528,27 @@ def _try_handle_account_command(db, family_id, text: str):
         name = m.group(1).strip()
         bal = float(m.group(2))
         snap = account_service.add_balance_snapshot(db, family_id, name, bal)
-        return f"✅ 已记录余额快照\n{name} = {format_money(bal)} ({snap.as_of_date})"
+        return f"✅ Balance snapshot recorded\n{name} = {format_money(bal)} ({snap.as_of_date})"
 
     m = _ADD_ACCOUNT_RE.match(text or "")
     if m:
         name = m.group(1).strip()
         if not name:
-            return "请提供账户名，如「加账户 OCBC」"
+            return "Please provide an account name, e.g. \"add account OCBC\""
         acc = account_service.ensure_account(db, family_id, name)
-        return f"✅ 已注册账户：{acc.name}"
+        return f"✅ Account registered: {acc.name}"
 
     return None
 
 
 _QUERY_PATTERNS = [
-    (re.compile(r"(本月|这个月|this month).*(花|开销|支出|expense)", re.IGNORECASE), "month_expense"),
-    (re.compile(r"(本月|这个月|this month).*(储蓄|存钱|savings)", re.IGNORECASE), "month_savings"),
-    (re.compile(r"(本月|这个月|this month).*(收入|工资|income)", re.IGNORECASE), "month_income"),
-    (re.compile(r"(本月|这个月|this month).*(储蓄率|savings rate)", re.IGNORECASE), "savings_rate"),
-    (re.compile(r"(今天|今日|today).*(花|开销|支出|expense)", re.IGNORECASE), "today_expense"),
-    (re.compile(r"(总结|summary)", re.IGNORECASE), "month_summary"),
-    (re.compile(r"(导出|export)", re.IGNORECASE), "export"),
+    (re.compile(r"this\s+month.*(spend|spent|expense|expenses)", re.IGNORECASE), "month_expense"),
+    (re.compile(r"this\s+month.*(saving|savings|saved)", re.IGNORECASE), "month_savings"),
+    (re.compile(r"this\s+month.*(income|salary|earn|earned)", re.IGNORECASE), "month_income"),
+    (re.compile(r"savings\s+rate", re.IGNORECASE), "savings_rate"),
+    (re.compile(r"today.*(spend|spent|expense|expenses)", re.IGNORECASE), "today_expense"),
+    (re.compile(r"\bsummary\b", re.IGNORECASE), "month_summary"),
+    (re.compile(r"\bexport\b", re.IGNORECASE), "export"),
 ]
 
 
@@ -557,29 +557,29 @@ def _try_handle_query(db: Session, family_id: Optional[int], text: str):
     for rx, kind in _QUERY_PATTERNS:
         if rx.search(t):
             if kind == "month_expense":
-                return f"📤 本月开销：{format_money(record_service.month_total(db, family_id, 'expense'))}"
+                return f"📤 This month's expenses: {format_money(record_service.month_total(db, family_id, 'expense'))}"
             if kind == "month_savings":
-                return f"💰 本月储蓄：{format_money(record_service.month_total(db, family_id, 'savings'))}"
+                return f"💰 This month's savings: {format_money(record_service.month_total(db, family_id, 'savings'))}"
             if kind == "month_income":
-                return f"💵 本月收入：{format_money(record_service.month_total(db, family_id, 'income'))}"
+                return f"💵 This month's income: {format_money(record_service.month_total(db, family_id, 'income'))}"
             if kind == "savings_rate":
-                return f"📈 本月储蓄率：{record_service.savings_rate(db, family_id)}%"
+                return f"📈 This month's savings rate: {record_service.savings_rate(db, family_id)}%"
             if kind == "today_expense":
-                return f"📅 今天开销：{format_money(record_service.today_expense(db, family_id))}"
+                return f"📅 Today's expenses: {format_money(record_service.today_expense(db, family_id))}"
             if kind == "month_summary":
                 return report_service.monthly_summary_text(db, family_id)
             if kind == "export":
                 path = excel_export.export_monthly(db, family_id)
-                return f"📁 已生成月报：\n{path}\n（也可在 dashboard 下载）"
+                return f"📁 Monthly report generated:\n{path}\n(You can also download it from the dashboard.)"
 
-    m = re.search(r"([A-Za-z一-龥]+)\s*类别.*(花|开销|多少|支出)", t)
+    m = re.search(r"(?:category\s+)?([A-Za-z][A-Za-z\s]{1,30}?)\s+category\b", t, re.IGNORECASE)
     if m:
-        cat = m.group(1)
-        return f"🏷️ {cat} 类别本月开销：{format_money(record_service.category_total(db, family_id, cat))}"
+        cat = m.group(1).strip()
+        return f"🏷️ {cat} category this month: {format_money(record_service.category_total(db, family_id, cat))}"
 
-    m = re.search(r"(本月|这个月)\s*([A-Za-z][A-Za-z0-9 ]{1,20}|[一-龥]{1,8})\s*花多少", t)
+    m = re.search(r"this\s+month\s+([A-Za-z][A-Za-z0-9 ]{1,20}?)\s+(?:spent|how\s+much)", t, re.IGNORECASE)
     if m:
-        merchant = m.group(2).strip()
-        return f"🏬 {merchant} 本月支出：{format_money(record_service.merchant_total(db, family_id, merchant))}"
+        merchant = m.group(1).strip()
+        return f"🏬 {merchant} this month: {format_money(record_service.merchant_total(db, family_id, merchant))}"
 
     return None
