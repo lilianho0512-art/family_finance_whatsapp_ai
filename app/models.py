@@ -7,6 +7,7 @@ class Family(Base):
     __tablename__ = "families"
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(120), nullable=False)
+    default_currency = Column(String(10), nullable=False, default="MYR")
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -105,6 +106,7 @@ class Loan(Base):
     family_id = Column(Integer, ForeignKey("families.id"), nullable=False, index=True)
     kind = Column(String(20), nullable=False, default="loan")  # loan | installment
     lender = Column(String(120), nullable=False)
+    currency = Column(String(10), nullable=False, default="MYR")
     principal = Column(Float, nullable=False, default=0.0)
     interest_rate = Column(Float, nullable=True)               # annual %, nullable
     term_months = Column(Integer, nullable=True)
@@ -126,6 +128,7 @@ class RecurringExpense(Base):
     family_id = Column(Integer, ForeignKey("families.id"), nullable=False, index=True)
     name = Column(String(120), nullable=False)
     amount = Column(Float, nullable=False, default=0.0)
+    currency = Column(String(10), nullable=False, default="MYR")
     payment_due_day = Column(Integer, nullable=False)  # 1..31, clamped to month-end
     category = Column(String(100), nullable=True)      # for the eventual expense record
     account = Column(String(80), nullable=True)

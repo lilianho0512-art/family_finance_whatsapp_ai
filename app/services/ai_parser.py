@@ -108,8 +108,9 @@ def _normalize(parsed, fallback_text: str) -> dict:
         out["amount"] = float(out.get("amount") or 0)
     except Exception:
         out["amount"] = rule["amount"]
-    if not out.get("currency"):
-        out["currency"] = "MYR"
+    # Currency intentionally NOT defaulted here — let the caller
+    # (whatsapp router) substitute the family default if the parsers
+    # didn't extract a hint.
     if not out.get("date"):
         out["date"] = rule["date"]
     try:

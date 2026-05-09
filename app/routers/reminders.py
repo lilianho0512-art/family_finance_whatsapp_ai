@@ -6,11 +6,20 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.models import Family
 from app.services import recurring_expense_service, reminder_service
+from app.utils.currency import SUPPORTED_CURRENCIES
 from app.routers.auth import get_optional_user, get_current_user
+
+
+def _family_currency(db: Session, family_id: int) -> str:
+    fam = db.query(Family).get(family_id)
+    return (fam.default_currency if fam else "MYR") or "MYR"
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(settings.BASE_DIR / "app" / "templates"))
+from app.utils.currency import format_money as _fm
+templates.env.filters["money"] = _fm
 
 
 @router.get("/reminders", response_class=HTMLResponse)
@@ -32,6 +41,8 @@ def reminders_page(request: Request, db: Session = Depends(get_db)):
             "recurring": recurring,
             "history": history,
             "monthly_total": recurring_expense_service.total_monthly(db, user.family_id),
+            "currencies": SUPPORTED_CURRENCIES,
+            "family_currency": _family_currency(db, user.family_id),
         },
     )
 
@@ -42,6 +53,7 @@ def reminders_recurring_create(
     name: str = Form(...),
     amount: float = Form(...),
     payment_due_day: int = Form(...),
+    currency: str = Form("MYR"),
     category: str = Form(""),
     account: str = Form(""),
     notes: str = Form(""),
@@ -53,6 +65,7 @@ def reminders_recurring_create(
     recurring_expense_service.create_recurring(
         db, user.family_id,
         name=name, amount=amount, payment_due_day=payment_due_day,
+        currency=currency,
         category=category or None, account=account or None, notes=notes or None,
     )
     return RedirectResponse("/reminders", status_code=303)
@@ -65,6 +78,7 @@ def reminders_recurring_update(
     name: str = Form(...),
     amount: float = Form(...),
     payment_due_day: int = Form(...),
+    currency: str = Form("MYR"),
     category: str = Form(""),
     account: str = Form(""),
     notes: str = Form(""),
@@ -75,6 +89,7 @@ def reminders_recurring_update(
     updated = recurring_expense_service.update_recurring(
         db, user.family_id, item_id,
         name=name.strip(), amount=amount, payment_due_day=payment_due_day,
+        currency=currency,
         category=category or None, account=account or None, notes=notes or None,
         status=status,
     )

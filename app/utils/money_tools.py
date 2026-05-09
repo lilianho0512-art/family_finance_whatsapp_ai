@@ -26,7 +26,7 @@ def extract_amount(text: str):
 
 
 def format_money(amount, currency: str = "MYR") -> str:
-    try:
-        return f"{currency} {float(amount):.2f}"
-    except Exception:
-        return f"{currency} {amount}"
+    """Render an amount with a currency symbol prefix (e.g. "RM 88.50",
+    "$ 50.00"). Delegates to app.utils.currency for the symbol map."""
+    from app.utils.currency import format_money as _fmt  # avoid cycle
+    return _fmt(amount, currency)

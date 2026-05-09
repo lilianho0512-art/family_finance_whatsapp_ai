@@ -70,7 +70,7 @@
         <td><small>{{ r.whatsapp_number or '-' }}</small></td>
         <td>{{ r.record_type }}</td>
         <td>{{ r.merchant or '-' }}</td>
-        <td>RM {{ "%.2f"|format(r.amount or 0) }}</td>
+        <td>{{ (r.amount or 0)|money(r.currency or 'MYR') }}</td>
         <td>{{ r.category or '-' }}</td>
         <td>{{ r.payment_method or '-' }}</td>
         <td><span class="badge bg-secondary">{{ r.status }}</span></td>

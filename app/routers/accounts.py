@@ -6,12 +6,15 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.models import Family
 from app.services import account_service
 from app.utils.date_tools import parse_date
 from app.routers.auth import get_optional_user, get_current_user
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(settings.BASE_DIR / "app" / "templates"))
+from app.utils.currency import format_money as _fm
+templates.env.filters["money"] = _fm
 
 
 @router.get("/accounts", response_class=HTMLResponse)
@@ -22,11 +25,13 @@ def accounts_page(request: Request, db: Session = Depends(get_db)):
     rows = account_service.all_account_balances(db, user.family_id)
     accounts = account_service.list_accounts(db, user.family_id)
     snapshots = account_service.list_snapshots(db, user.family_id, limit=30)
+    fam = db.query(Family).get(user.family_id)
     return templates.TemplateResponse(
         "accounts.html",
         {
             "request": request,
             "user": user,
+            "family": fam,
             "rows": rows,
             "accounts": accounts,
             "snapshots": snapshots,

@@ -17,6 +17,7 @@
       <a class="btn btn-outline-light btn-sm" href="/loans">Loans</a>
       <a class="btn btn-outline-light btn-sm" href="/reminders">Reminders</a>
       <a class="btn btn-outline-light btn-sm" href="/reports">Reports</a>
+      <a class="btn btn-outline-light btn-sm" href="/settings">Settings</a>
       <a class="btn btn-warning btn-sm" href="/export/monthly">Export Excel</a>
       {% if user.is_superadmin %}
         <a class="btn btn-danger btn-sm" href="/admin">🛡️ Admin</a>
@@ -28,15 +29,15 @@
 </nav>
 <div class="container">
   <div class="row g-3">
-    <div class="col-md-3"><div class="card text-bg-success"><div class="card-body"><h6>Income (this month)</h6><h3>RM {{ "%.2f"|format(income) }}</h3></div></div></div>
-    <div class="col-md-3"><div class="card text-bg-danger"><div class="card-body"><h6>Expenses (this month)</h6><h3>RM {{ "%.2f"|format(expense) }}</h3></div></div></div>
-    <div class="col-md-3"><div class="card text-bg-info"><div class="card-body"><h6>Savings (this month)</h6><h3>RM {{ "%.2f"|format(savings) }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-bg-success"><div class="card-body"><h6>Income (this month)</h6><h3>{{ income|money(family.default_currency) }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-bg-danger"><div class="card-body"><h6>Expenses (this month)</h6><h3>{{ expense|money(family.default_currency) }}</h3></div></div></div>
+    <div class="col-md-3"><div class="card text-bg-info"><div class="card-body"><h6>Savings (this month)</h6><h3>{{ savings|money(family.default_currency) }}</h3></div></div></div>
     <div class="col-md-3"><div class="card text-bg-warning"><div class="card-body"><h6>Savings rate</h6><h3>{{ rate }}%</h3></div></div></div>
   </div>
 
   <div class="row g-3 mt-1">
-    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Today's expenses</h6><h4>RM {{ "%.2f"|format(today) }}</h4></div></div></div>
-    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Top expense category</h6><h5>{{ top_cat[0] }}</h5><small>RM {{ "%.2f"|format(top_cat[1]) }}</small></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Today's expenses</h6><h4>{{ today|money(family.default_currency) }}</h4></div></div></div>
+    <div class="col-md-3"><div class="card"><div class="card-body"><h6>Top expense category</h6><h5>{{ top_cat[0] }}</h5><small>{{ top_cat[1]|money(family.default_currency) }}</small></div></div></div>
     <div class="col-md-3"><div class="card"><div class="card-body"><h6>Needs follow-up</h6><h4>{{ need_q }}</h4><small><a href="/records?status=need_question">view need_question</a></small></div></div></div>
     <div class="col-md-3"><div class="card"><div class="card-body"><h6>Needs review</h6><h4>{{ need_r }}</h4><small><a href="/records?status=need_review">view need_review</a></small></div></div></div>
   </div>
@@ -86,7 +87,7 @@
         <td class="text-end text-success">{{ "%.2f"|format(r.income_since) }}</td>
         <td class="text-end text-danger">{{ "%.2f"|format(r.expense_since) }}</td>
         <td class="text-end text-info">{{ "%.2f"|format(r.savings_since) }}</td>
-        <td class="text-end"><strong>RM {{ "%.2f"|format(r.computed_balance) }}</strong></td>
+        <td class="text-end"><strong>{{ r.computed_balance|money(family.default_currency) }}</strong></td>
       </tr>
     {% else %}
       <tr><td colspan="7" class="text-muted">No accounts yet. <a href="/accounts">Add one</a> or send "set Maybank 5000" on Telegram.</td></tr>
@@ -99,7 +100,7 @@
     <thead><tr><th>Category</th><th class="text-end">This month</th></tr></thead>
     <tbody>
     {% for c, v in categories %}
-      <tr><td>{{ c }}</td><td class="text-end">RM {{ "%.2f"|format(v) }}</td></tr>
+      <tr><td>{{ c }}</td><td class="text-end">{{ v|money(family.default_currency) }}</td></tr>
     {% else %}
       <tr><td colspan="2" class="text-muted">No data yet</td></tr>
     {% endfor %}
@@ -115,7 +116,7 @@
         <td>{{ r.date }}</td>
         <td>{{ r.record_type }}</td>
         <td>{{ r.merchant or '-' }}</td>
-        <td>RM {{ "%.2f"|format(r.amount or 0) }}</td>
+        <td>{{ (r.amount or 0)|money(r.currency or family.default_currency) }}</td>
         <td>{{ r.category or '-' }}</td>
         <td>{{ r.payment_method or '-' }}</td>
         <td><span class="badge bg-secondary">{{ r.status }}</span></td>

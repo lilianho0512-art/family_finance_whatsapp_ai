@@ -17,6 +17,7 @@
       <a class="btn btn-outline-light btn-sm" href="/loans">Loans</a>
       <a class="btn btn-outline-light btn-sm" href="/reminders">Reminders</a>
       <a class="btn btn-outline-light btn-sm" href="/reports">Reports</a>
+      <a class="btn btn-outline-light btn-sm" href="/settings">Settings</a>
       <a class="btn btn-warning btn-sm" href="/export/monthly">Export Excel</a>
       <span class="text-light ms-3">{{ user.email }}</span>
       <a class="btn btn-outline-light btn-sm" href="/auth/logout">Logout</a>
@@ -67,7 +68,7 @@
           {% endif %}
         </td>
         <td>{{ u.name }}</td>
-        <td class="text-end">RM {{ "%.2f"|format(u.amount) }}</td>
+        <td class="text-end">{{ u.amount|money(u.currency or family_currency) }}</td>
         <td>
           {% if u.target_type == 'loan' %}
             <a class="small" href="/loans">manage</a>
@@ -87,7 +88,7 @@
   {# ---- Recurring expenses CRUD ---- #}
   <div class="d-flex justify-content-between align-items-end mb-2">
     <h5 class="mb-0">Recurring expenses</h5>
-    <small class="text-muted">Total monthly (active): <strong>RM {{ "%.2f"|format(monthly_total) }}</strong></small>
+    <small class="text-muted">Total monthly (active): <strong>{{ monthly_total|money(family_currency) }}</strong></small>
   </div>
 
   <div class="card mb-3">
@@ -98,8 +99,16 @@
           <label class="form-label">Name</label>
           <input class="form-control form-control-sm" name="name" required placeholder="TNB Electric / Netflix">
         </div>
+        <div class="col-md-1">
+          <label class="form-label">Currency</label>
+          <select class="form-select form-select-sm" name="currency">
+            {% for c in currencies %}
+              <option value="{{ c }}" {% if family_currency == c %}selected{% endif %}>{{ c }}</option>
+            {% endfor %}
+          </select>
+        </div>
         <div class="col-md-2">
-          <label class="form-label">Amount (RM)</label>
+          <label class="form-label">Amount</label>
           <input type="number" step="0.01" class="form-control form-control-sm" name="amount" required>
         </div>
         <div class="col-md-2">
@@ -110,7 +119,7 @@
           <label class="form-label">Category</label>
           <input class="form-control form-control-sm" name="category" placeholder="Utilities">
         </div>
-        <div class="col-md-2">
+        <div class="col-md-1">
           <label class="form-label">Account</label>
           <input class="form-control form-control-sm" name="account" placeholder="Maybank">
         </div>
@@ -128,6 +137,7 @@
     <thead>
       <tr>
         <th>Name</th>
+        <th>Currency</th>
         <th class="text-end">Amount</th>
         <th>Due day</th>
         <th>Category</th>
@@ -141,6 +151,13 @@
       <tr id="recurring-{{ r.id }}" class="{% if r.status == 'paused' %}text-muted{% endif %}">
         <form method="post" action="/reminders/recurring/{{ r.id }}">
           <td><input class="form-control form-control-sm" name="name" value="{{ r.name }}" required></td>
+          <td>
+            <select class="form-select form-select-sm" name="currency">
+              {% for c in currencies %}
+                <option value="{{ c }}" {% if (r.currency or 'MYR') == c %}selected{% endif %}>{{ c }}</option>
+              {% endfor %}
+            </select>
+          </td>
           <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="amount" value="{{ r.amount }}" required></td>
           <td><input type="number" min="1" max="31" class="form-control form-control-sm" name="payment_due_day" value="{{ r.payment_due_day }}" required></td>
           <td><input class="form-control form-control-sm" name="category" value="{{ r.category or '' }}"></td>
@@ -162,7 +179,7 @@
           </td>
       </tr>
     {% else %}
-      <tr><td colspan="7" class="text-muted">No recurring expenses yet. Add one above.</td></tr>
+      <tr><td colspan="8" class="text-muted">No recurring expenses yet. Add one above.</td></tr>
     {% endfor %}
     </tbody>
   </table>

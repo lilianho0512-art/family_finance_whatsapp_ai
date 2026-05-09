@@ -17,6 +17,7 @@
       <a class="btn btn-outline-light btn-sm" href="/loans">Loans</a>
       <a class="btn btn-outline-light btn-sm" href="/reminders">Reminders</a>
       <a class="btn btn-outline-light btn-sm" href="/reports">Reports</a>
+      <a class="btn btn-outline-light btn-sm" href="/settings">Settings</a>
       <a class="btn btn-warning btn-sm" href="/export/monthly">Export Excel</a>
       <span class="text-light ms-3">{{ user.email }}</span>
       <a class="btn btn-outline-light btn-sm" href="/auth/logout">Logout</a>
@@ -38,12 +39,12 @@
     {% for r in rows %}
       <tr>
         <td><strong>{{ r.account }}</strong></td>
-        <td class="text-end">RM {{ "%.2f"|format(r.snapshot_balance) }}</td>
+        <td class="text-end">{{ r.snapshot_balance|money(family.default_currency) }}</td>
         <td>{{ r.snapshot_date or '—' }}</td>
         <td class="text-end text-success">+{{ "%.2f"|format(r.income_since) }}</td>
         <td class="text-end text-danger">−{{ "%.2f"|format(r.expense_since) }}</td>
         <td class="text-end text-info">+{{ "%.2f"|format(r.savings_since) }}</td>
-        <td class="text-end"><strong>RM {{ "%.2f"|format(r.computed_balance) }}</strong></td>
+        <td class="text-end"><strong>{{ r.computed_balance|money(family.default_currency) }}</strong></td>
       </tr>
     {% else %}
       <tr><td colspan="7" class="text-muted">No accounts yet. Register one below or add a balance snapshot.</td></tr>
@@ -115,7 +116,7 @@
       <tr>
         <td>{{ s.as_of_date }}</td>
         <td>{{ s.account_name }}</td>
-        <td class="text-end">RM {{ "%.2f"|format(s.balance) }}</td>
+        <td class="text-end">{{ s.balance|money(family.default_currency) }}</td>
         <td><small>{{ s.note or '' }}</small></td>
         <td>
           <form method="post" action="/accounts/snapshot/{{ s.id }}/delete" class="d-inline"

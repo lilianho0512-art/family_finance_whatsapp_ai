@@ -17,6 +17,7 @@
       <a class="btn btn-outline-light btn-sm" href="/loans">Loans</a>
       <a class="btn btn-outline-light btn-sm" href="/reminders">Reminders</a>
       <a class="btn btn-outline-light btn-sm" href="/reports">Reports</a>
+      <a class="btn btn-outline-light btn-sm" href="/settings">Settings</a>
       <a class="btn btn-warning btn-sm" href="/export/monthly">Export Excel</a>
     </div>
   </div>
@@ -24,11 +25,11 @@
 <div class="container">
   <h3>This month's report</h3>
   <ul class="list-group mb-4">
-    <li class="list-group-item d-flex justify-content-between"><span>Income (this month)</span><span>RM {{ "%.2f"|format(income) }}</span></li>
-    <li class="list-group-item d-flex justify-content-between"><span>Expenses (this month)</span><span>RM {{ "%.2f"|format(expense) }}</span></li>
-    <li class="list-group-item d-flex justify-content-between"><span>Savings (this month)</span><span>RM {{ "%.2f"|format(savings) }}</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Income (this month)</span><span>{{ income|money(family.default_currency) }}</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Expenses (this month)</span><span>{{ expense|money(family.default_currency) }}</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Savings (this month)</span><span>{{ savings|money(family.default_currency) }}</span></li>
     <li class="list-group-item d-flex justify-content-between"><span>Savings rate</span><span>{{ rate }}%</span></li>
-    <li class="list-group-item d-flex justify-content-between"><span>Net cash flow</span><span>RM {{ "%.2f"|format(income - expense - savings) }}</span></li>
+    <li class="list-group-item d-flex justify-content-between"><span>Net cash flow</span><span>{{ (income - expense - savings)|money(family.default_currency) }}</span></li>
   </ul>
 
   <h4>Spending by category</h4>
@@ -39,7 +40,7 @@
       {% for c, v in categories %}
         <tr>
           <td>{{ c }}</td>
-          <td class="text-end">RM {{ "%.2f"|format(v) }}</td>
+          <td class="text-end">{{ v|money(family.default_currency) }}</td>
           <td>
             <div class="progress" style="height: 18px;">
               <div class="progress-bar" role="progressbar"

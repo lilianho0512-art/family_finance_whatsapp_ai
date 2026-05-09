@@ -7,12 +7,16 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
+from app.models import Family
 from app.services import loan_service
+from app.utils.currency import SUPPORTED_CURRENCIES
 from app.utils.date_tools import parse_date
 from app.routers.auth import get_optional_user, get_current_user
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(settings.BASE_DIR / "app" / "templates"))
+from app.utils.currency import format_money as _fm
+templates.env.filters["money"] = _fm
 
 
 def _opt_float(v: str) -> Optional[float]:
@@ -35,6 +39,11 @@ def _opt_int(v: str) -> Optional[int]:
         return None
 
 
+def _family_currency(db: Session, family_id: int) -> str:
+    fam = db.query(Family).get(family_id)
+    return (fam.default_currency if fam else "MYR") or "MYR"
+
+
 @router.get("/loans", response_class=HTMLResponse)
 def loans_page(request: Request, db: Session = Depends(get_db)):
     user = get_optional_user(request, db)
@@ -52,6 +61,7 @@ def loans_page(request: Request, db: Session = Depends(get_db)):
             "monthly_total": monthly,
             "outstanding_total": outstanding,
             "today": date.today().isoformat(),
+            "family_currency": _family_currency(db, user.family_id),
         },
     )
 
@@ -63,7 +73,12 @@ def loans_new(request: Request, db: Session = Depends(get_db)):
         return RedirectResponse("/login", status_code=303)
     return templates.TemplateResponse(
         "loan_form.html",
-        {"request": request, "user": user, "loan": None, "today": date.today().isoformat()},
+        {
+            "request": request, "user": user, "loan": None,
+            "today": date.today().isoformat(),
+            "currencies": SUPPORTED_CURRENCIES,
+            "family_currency": _family_currency(db, user.family_id),
+        },
     )
 
 
@@ -72,6 +87,7 @@ def loans_create(
     request: Request,
     lender: str = Form(...),
     kind: str = Form("loan"),
+    currency: str = Form("MYR"),
     principal: float = Form(...),
     monthly_payment: float = Form(...),
     interest_rate: str = Form(""),
@@ -88,6 +104,7 @@ def loans_create(
         user.family_id,
         lender=lender,
         kind=kind,
+        currency=currency,
         principal=principal,
         monthly_payment=monthly_payment,
         interest_rate=_opt_float(interest_rate),
@@ -110,7 +127,12 @@ def loans_edit(loan_id: int, request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="not found")
     return templates.TemplateResponse(
         "loan_form.html",
-        {"request": request, "user": user, "loan": loan, "today": date.today().isoformat()},
+        {
+            "request": request, "user": user, "loan": loan,
+            "today": date.today().isoformat(),
+            "currencies": SUPPORTED_CURRENCIES,
+            "family_currency": _family_currency(db, user.family_id),
+        },
     )
 
 
@@ -120,6 +142,7 @@ def loans_update(
     request: Request,
     lender: str = Form(...),
     kind: str = Form("loan"),
+    currency: str = Form("MYR"),
     principal: float = Form(...),
     monthly_payment: float = Form(...),
     interest_rate: str = Form(""),
@@ -138,6 +161,7 @@ def loans_update(
         loan_id,
         lender=lender.strip(),
         kind=kind,
+        currency=currency,
         principal=principal,
         monthly_payment=monthly_payment,
         interest_rate=_opt_float(interest_rate),

@@ -4,11 +4,14 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
+from app.models import Family
 from app.services import record_service
 from app.routers.auth import get_optional_user
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(settings.BASE_DIR / "app" / "templates"))
+from app.utils.currency import format_money as _fm
+templates.env.filters["money"] = _fm
 
 
 @router.get("/reports", response_class=HTMLResponse)
@@ -17,6 +20,7 @@ def reports_page(request: Request, db: Session = Depends(get_db)):
     if user is None:
         return RedirectResponse("/login", status_code=303)
     family_id = user.family_id
+    fam = db.query(Family).get(family_id)
     inc = record_service.month_total(db, family_id, "income")
     exp = record_service.month_total(db, family_id, "expense")
     sav = record_service.month_total(db, family_id, "savings")
@@ -27,6 +31,7 @@ def reports_page(request: Request, db: Session = Depends(get_db)):
         {
             "request": request,
             "user": user,
+            "family": fam,
             "income": inc,
             "expense": exp,
             "savings": sav,

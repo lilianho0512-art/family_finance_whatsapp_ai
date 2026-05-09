@@ -20,7 +20,7 @@ def _row(r):
         r.record_type,
         r.merchant or "",
         float(r.amount or 0),
-        r.currency or "",
+        r.currency or "MYR",
         r.category or "",
         r.payment_method or "",
         r.source or "",
@@ -94,7 +94,7 @@ def export_monthly(db: Session, family_id: Optional[int], ref: date = None) -> s
 
     ws_l = wb.create_sheet("Loans")
     ws_l.append([
-        "ID", "Kind", "Lender", "Principal", "Current Balance", "Monthly Payment",
+        "ID", "Kind", "Lender", "Currency", "Principal", "Current Balance", "Monthly Payment",
         "Interest Rate %", "Term (months)", "Start Date", "Due Day", "Status", "Notes",
     ])
     _bold_header(ws_l)
@@ -105,6 +105,7 @@ def export_monthly(db: Session, family_id: Optional[int], ref: date = None) -> s
                 l.id,
                 l.kind,
                 l.lender,
+                l.currency or "MYR",
                 float(l.principal or 0),
                 float(l.current_balance or 0),
                 float(l.monthly_payment or 0),
@@ -116,8 +117,8 @@ def export_monthly(db: Session, family_id: Optional[int], ref: date = None) -> s
                 (l.notes or "")[:200],
             ])
         ws_l.append([])
-        ws_l.append(["Total monthly payment (active)", "", "", "", "", loan_service.total_monthly_payment(db, family_id)])
-        ws_l.append(["Total outstanding (active)",     "", "", "", loan_service.total_outstanding(db, family_id)])
+        ws_l.append(["Total monthly payment (active)", "", "", "", "", "", loan_service.total_monthly_payment(db, family_id)])
+        ws_l.append(["Total outstanding (active)",     "", "", "", "", loan_service.total_outstanding(db, family_id)])
 
     settings.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     fam_tag = f"_fam{family_id}" if family_id is not None else ""

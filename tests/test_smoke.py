@@ -147,6 +147,7 @@ class _StubRecord:
     def __init__(self, **kw):
         self.record_type = kw.get("record_type", "unknown")
         self.amount = kw.get("amount", 0)
+        self.currency = kw.get("currency", "MYR")
         self.category = kw.get("category", "")
         self.payment_method = kw.get("payment_method", "")
         self.source = kw.get("source", "")
@@ -448,7 +449,7 @@ def test_reminder_day_of_message(monkeypatch):
     assert sent == 1 and dup == 0
     assert "TODAY" in sends[0]
     assert "Maybank" in sends[0]
-    assert "MYR 1500.00" in sends[0]
+    assert "RM 1500.00" in sends[0]  # MYR -> RM symbol
 
 
 def test_upcoming_for_family_combines_loans_and_recurring():
@@ -464,3 +465,127 @@ def test_upcoming_for_family_combines_loans_and_recurring():
     assert ("recurring", "TNB") in types
     # Sorted earliest-first
     assert items[0].due_date <= items[1].due_date
+
+
+# ---------------------------------------------------------------------------
+# Currency: format_money + parse_currency_hint + ask_currency step
+# ---------------------------------------------------------------------------
+
+
+def test_format_money_each_currency():
+    from app.utils.currency import format_money
+    assert format_money(88.5, "MYR") == "RM 88.50"
+    assert format_money(50, "USD") == "$ 50.00"
+    assert format_money(50, "SGD") == "S$ 50.00"
+    assert format_money(50, "AUD") == "A$ 50.00"
+    assert format_money(100, "EUR") == "€ 100.00"
+    assert format_money(100, "GBP") == "£ 100.00"
+    assert format_money(1000, "JPY") == "¥ 1000.00"
+    assert format_money(1000, "HKD") == "HK$ 1000.00"
+    # Unknown code falls back to the code itself
+    assert format_money(50, "XYZ") == "RM 50.00"  # normalize → MYR
+
+
+def test_parse_currency_hint_iso_codes():
+    from app.utils.currency import parse_currency_hint
+    assert parse_currency_hint("USD 50 lunch") == "USD"
+    assert parse_currency_hint("Tesco MYR 88.50") == "MYR"
+    assert parse_currency_hint("usd 50 lowercase") == "USD"  # case-insensitive code
+    assert parse_currency_hint("salary 3800 SGD") == "SGD"
+    assert parse_currency_hint("no currency here") is None
+
+
+def test_parse_currency_hint_symbols():
+    from app.utils.currency import parse_currency_hint
+    # Order matters — S$ must beat $
+    assert parse_currency_hint("S$50 hawker") == "SGD"
+    assert parse_currency_hint("HK$200") == "HKD"
+    assert parse_currency_hint("$50 lunch") == "USD"
+    assert parse_currency_hint("RM88 groceries") == "MYR"
+    assert parse_currency_hint("£100 london") == "GBP"
+    assert parse_currency_hint("€50 vacation") == "EUR"
+
+
+def test_currency_normalize():
+    from app.utils.currency import normalize, is_supported
+    assert normalize("usd") == "USD"
+    assert normalize("xyz") == "MYR"
+    assert normalize("") == "MYR"
+    assert is_supported("USD") is True
+    assert is_supported("XYZ") is False
+
+
+def test_rule_parser_extracts_currency_hint():
+    from app.services import rule_parser
+    r = rule_parser.parse("USD 50 lunch")
+    assert r["currency"] == "USD"
+    r = rule_parser.parse("S$ 25 hawker")
+    assert r["currency"] == "SGD"
+    r = rule_parser.parse("plain text no money")
+    assert r["currency"] == ""  # parser leaves empty so caller can default
+
+
+def test_question_engine_resolves_currency():
+    assert question_engine.resolve_answer("ask_currency", "A") == "MYR"
+    assert question_engine.resolve_answer("ask_currency", "B") == "SGD"
+    assert question_engine.resolve_answer("ask_currency", "C") == "USD"
+    assert question_engine.resolve_answer("ask_currency", "Z") is None
+
+
+def test_determine_next_asks_currency_after_amount():
+    rec = _StubRecord(record_type="expense", amount=50, currency="")
+    step, _q, _opts = question_engine.determine_next_question(rec)
+    assert step == "ask_currency"
+
+
+def test_determine_next_skips_currency_when_present():
+    rec = _StubRecord(record_type="expense", amount=50, currency="USD")
+    step, _q, _opts = question_engine.determine_next_question(rec)
+    assert step == "ask_category"  # past ask_currency
+
+
+def test_loan_service_currency_normalization():
+    from app.services import loan_service
+    db = _make_db()
+    fam = _make_family(db)
+    a = loan_service.create_loan(db, fam.id, lender="A", principal=100, monthly_payment=10, currency="usd")
+    assert a.currency == "USD"  # normalized
+    b = loan_service.create_loan(db, fam.id, lender="B", principal=100, monthly_payment=10, currency="garbage")
+    assert b.currency == "MYR"  # falls back to default
+    upd = loan_service.update_loan(db, fam.id, a.id, currency="sgd")
+    assert upd.currency == "SGD"
+
+
+def test_recurring_service_currency_normalization():
+    from app.services import recurring_expense_service as svc
+    db = _make_db()
+    fam = _make_family(db)
+    item = svc.create_recurring(db, fam.id, name="X", amount=10, payment_due_day=10, currency="eur")
+    assert item.currency == "EUR"
+    upd = svc.update_recurring(db, fam.id, item.id, currency="garbage")
+    # garbage falls back to MYR via normalize
+    assert upd.currency == "MYR"
+
+
+def test_reminder_message_uses_item_currency(monkeypatch):
+    from datetime import date as _d
+    from app.services import loan_service, reminder_service
+    from app.models import WhatsappEnrollment
+    db = _make_db()
+    fam = _make_family(db)
+    db.add(WhatsappEnrollment(family_id=fam.id, whatsapp_number="60123"))
+    db.commit()
+    loan_service.create_loan(
+        db, fam.id, lender="HSBC", principal=300000, monthly_payment=1500,
+        currency="USD", payment_due_day=9,
+    )
+    sends = []
+    monkeypatch.setattr(
+        reminder_service.whatsapp_service,
+        "send_text",
+        lambda num, body: (sends.append(body) or True),
+    )
+    sent, _ = reminder_service.run_for_family(db, fam.id, today=_d(2026, 5, 9))
+    assert sent == 1
+    # Should display USD with $ symbol, not MYR/RM
+    assert "$ 1500.00" in sends[0]

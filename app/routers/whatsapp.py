@@ -369,6 +369,11 @@ def _handle_message(db: Session, msg: dict, provider: str = "meta"):
                 whatsapp_service.send_text(from_number, _render_confirmation(rec))
             return
 
+    # Resolve the family's default currency once for downstream commands.
+    from app.models import Family as _F
+    _fam = db.query(_F).get(family_id) if family_id else None
+    family_currency = (_fam.default_currency if _fam else "MYR") or "MYR"
+
     # 3. delete commands (undo / delete #id)
     delete_reply = _try_handle_delete(db, family_id, from_number, text)
     if delete_reply is not None:
@@ -376,13 +381,13 @@ def _handle_message(db: Session, msg: dict, provider: str = "meta"):
         return
 
     # 3b. account / ledger commands (balance / set X 5000 / add account X)
-    account_reply = _try_handle_account_command(db, family_id, text)
+    account_reply = _try_handle_account_command(db, family_id, text, family_currency)
     if account_reply is not None:
         whatsapp_service.send_text(from_number, account_reply)
         return
 
     # 4. queries (family-scoped)
-    query_reply = _try_handle_query(db, family_id, text)
+    query_reply = _try_handle_query(db, family_id, text, family_currency)
     if query_reply is not None:
         whatsapp_service.send_text(from_number, query_reply)
         return
@@ -390,7 +395,8 @@ def _handle_message(db: Session, msg: dict, provider: str = "meta"):
     # 4. parse new record
     if provider == "telegram":
         # Telegram path: skip AI parsing, walk the user through each field one
-        # at a time via the question chain. Original message kept as source_text.
+        # at a time via the question chain. Currency stays empty so
+        # ask_currency fires after ask_amount. Original message kept as source_text.
         rec = record_service.create_record(
             db,
             family_id=family_id,
@@ -398,13 +404,13 @@ def _handle_message(db: Session, msg: dict, provider: str = "meta"):
             record_type="unknown",
             date=date.today(),
             amount=0.0,
-            currency="MYR",
+            currency="",
             source_text=text,
             source_type=source_type,
             whatsapp_message_id=msg_id,
             file_path=file_path,
             status="need_question",
-            missing_fields="record_type,amount",
+            missing_fields="record_type,amount,currency",
         )
         intro = "Let's record this step by step."
     else:
@@ -417,7 +423,7 @@ def _handle_message(db: Session, msg: dict, provider: str = "meta"):
             date=parse_date(parsed.get("date") or "") or date.today(),
             merchant=parsed.get("merchant") or "",
             amount=float(parsed.get("amount") or 0),
-            currency=parsed.get("currency") or "MYR",
+            currency=parsed.get("currency") or family_currency,
             category=parsed.get("category") or "",
             payment_method=parsed.get("payment_method") or "",
             source=parsed.get("source") or "",
@@ -526,7 +532,7 @@ _BALANCE_SET_RE = re.compile(r"^\s*set\s+([A-Za-z][\w\s]{0,40}?)\s+(?:RM|MYR)?\s
 _ADD_ACCOUNT_RE = re.compile(r"^\s*add\s+account\s+(.+?)\s*$", re.IGNORECASE)
 
 
-def _try_handle_account_command(db, family_id, text: str):
+def _try_handle_account_command(db, family_id, text: str, currency: str = "MYR"):
     from app.services import account_service
     from app.utils.money_tools import format_money
     if _BALANCE_LIST_RE.match(text or ""):
@@ -537,8 +543,8 @@ def _try_handle_account_command(db, family_id, text: str):
         for r in rows:
             snap_str = f"snapshot {r['snapshot_date']}" if r['snapshot_date'] else "no snapshot"
             lines.append(
-                f"\n• {r['account']} = {format_money(r['computed_balance'])}\n"
-                f"  ({snap_str} {format_money(r['snapshot_balance'])} "
+                f"\n• {r['account']} = {format_money(r['computed_balance'], currency)}\n"
+                f"  ({snap_str} {format_money(r['snapshot_balance'], currency)} "
                 f"+inc {r['income_since']:.0f} -exp {r['expense_since']:.0f} +sav {r['savings_since']:.0f})"
             )
         return "\n".join(lines)
@@ -548,7 +554,7 @@ def _try_handle_account_command(db, family_id, text: str):
         name = m.group(1).strip()
         bal = float(m.group(2))
         snap = account_service.add_balance_snapshot(db, family_id, name, bal)
-        return f"✅ Balance snapshot recorded\n{name} = {format_money(bal)} ({snap.as_of_date})"
+        return f"✅ Balance snapshot recorded\n{name} = {format_money(bal, currency)} ({snap.as_of_date})"
 
     m = _ADD_ACCOUNT_RE.match(text or "")
     if m:
@@ -572,22 +578,22 @@ _QUERY_PATTERNS = [
 ]
 
 
-def _try_handle_query(db: Session, family_id: Optional[int], text: str):
+def _try_handle_query(db: Session, family_id: Optional[int], text: str, currency: str = "MYR"):
     t = text.strip()
     for rx, kind in _QUERY_PATTERNS:
         if rx.search(t):
             if kind == "month_expense":
-                return f"📤 This month's expenses: {format_money(record_service.month_total(db, family_id, 'expense'))}"
+                return f"📤 This month's expenses: {format_money(record_service.month_total(db, family_id, 'expense'), currency)}"
             if kind == "month_savings":
-                return f"💰 This month's savings: {format_money(record_service.month_total(db, family_id, 'savings'))}"
+                return f"💰 This month's savings: {format_money(record_service.month_total(db, family_id, 'savings'), currency)}"
             if kind == "month_income":
-                return f"💵 This month's income: {format_money(record_service.month_total(db, family_id, 'income'))}"
+                return f"💵 This month's income: {format_money(record_service.month_total(db, family_id, 'income'), currency)}"
             if kind == "savings_rate":
                 return f"📈 This month's savings rate: {record_service.savings_rate(db, family_id)}%"
             if kind == "today_expense":
-                return f"📅 Today's expenses: {format_money(record_service.today_expense(db, family_id))}"
+                return f"📅 Today's expenses: {format_money(record_service.today_expense(db, family_id), currency)}"
             if kind == "month_summary":
-                return report_service.monthly_summary_text(db, family_id)
+                return report_service.monthly_summary_text(db, family_id, currency=currency)
             if kind == "export":
                 path = excel_export.export_monthly(db, family_id)
                 return f"📁 Monthly report generated:\n{path}\n(You can also download it from the dashboard.)"
@@ -595,11 +601,11 @@ def _try_handle_query(db: Session, family_id: Optional[int], text: str):
     m = re.search(r"(?:category\s+)?([A-Za-z][A-Za-z\s]{1,30}?)\s+category\b", t, re.IGNORECASE)
     if m:
         cat = m.group(1).strip()
-        return f"🏷️ {cat} category this month: {format_money(record_service.category_total(db, family_id, cat))}"
+        return f"🏷️ {cat} category this month: {format_money(record_service.category_total(db, family_id, cat), currency)}"
 
     m = re.search(r"this\s+month\s+([A-Za-z][A-Za-z0-9 ]{1,20}?)\s+(?:spent|how\s+much)", t, re.IGNORECASE)
     if m:
         merchant = m.group(1).strip()
-        return f"🏬 {merchant} this month: {format_money(record_service.merchant_total(db, family_id, merchant))}"
+        return f"🏬 {merchant} this month: {format_money(record_service.merchant_total(db, family_id, merchant), currency)}"
 
     return None

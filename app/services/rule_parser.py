@@ -1,6 +1,7 @@
 import re
 from app.utils.date_tools import parse_date
 from app.utils.money_tools import extract_amount
+from app.utils.currency import parse_currency_hint
 
 # Explicit type markers — highest priority. If the user (or our own confirmation
 # message echoed back) says "family expense" / "family savings" / etc., we lock
@@ -161,7 +162,7 @@ def parse(text: str) -> dict:
         "date": d.isoformat(),
         "merchant": merchant,
         "amount": amount,
-        "currency": "MYR",
+        "currency": parse_currency_hint(text) or "",
         "category": category,
         "payment_method": payment,
         "source": source,

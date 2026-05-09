@@ -10,6 +10,8 @@ from app.routers.auth import get_optional_user
 
 router = APIRouter()
 templates = Jinja2Templates(directory=str(settings.BASE_DIR / "app" / "templates"))
+from app.utils.currency import format_money as _fm
+templates.env.filters["money"] = _fm
 
 
 @router.get("/records", response_class=HTMLResponse)

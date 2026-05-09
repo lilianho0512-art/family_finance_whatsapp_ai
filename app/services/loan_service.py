@@ -30,6 +30,7 @@ def create_loan(
     principal: float,
     monthly_payment: float,
     kind: str = "loan",
+    currency: str = "MYR",
     interest_rate: Optional[float] = None,
     term_months: Optional[int] = None,
     start_date: Optional[date] = None,
@@ -37,6 +38,7 @@ def create_loan(
     current_balance: Optional[float] = None,
     notes: Optional[str] = None,
 ) -> Loan:
+    from app.utils.currency import normalize as _norm_currency
     if kind not in VALID_KINDS:
         kind = "loan"
     if payment_due_day is not None and not (1 <= payment_due_day <= 31):
@@ -45,6 +47,7 @@ def create_loan(
         family_id=family_id,
         kind=kind,
         lender=lender.strip(),
+        currency=_norm_currency(currency),
         principal=float(principal or 0),
         interest_rate=interest_rate,
         term_months=term_months,
@@ -62,6 +65,7 @@ def create_loan(
 
 
 def update_loan(db: Session, family_id: int, loan_id: int, **fields) -> Optional[Loan]:
+    from app.utils.currency import normalize as _norm_currency
     loan = get_loan(db, family_id, loan_id)
     if loan is None:
         return None
@@ -73,6 +77,8 @@ def update_loan(db: Session, family_id: int, loan_id: int, **fields) -> Optional
         d = fields["payment_due_day"]
         if d is not None and not (1 <= int(d) <= 31):
             fields["payment_due_day"] = None
+    if "currency" in fields and fields["currency"] is not None:
+        fields["currency"] = _norm_currency(fields["currency"])
     for k, v in fields.items():
         if hasattr(loan, k) and v is not None:
             setattr(loan, k, v)

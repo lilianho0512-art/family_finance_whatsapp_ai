@@ -1,8 +1,15 @@
 from typing import Optional, Tuple
 from app.utils.money_tools import extract_amount
+from app.utils.currency import SUPPORTED_CURRENCIES, normalize as normalize_currency
 
 AMOUNT_QUESTION = (
     "How much was it? Reply with the amount (e.g. 88.50, RM 88.50, MYR 123)."
+)
+
+# Letter-keyed currency options derived from SUPPORTED_CURRENCIES.
+CURRENCY_OPTIONS = {chr(ord("A") + i): code for i, code in enumerate(SUPPORTED_CURRENCIES)}
+CURRENCY_QUESTION = "Pick a currency:\n" + "\n".join(
+    f"{letter}. {code}" for letter, code in CURRENCY_OPTIONS.items()
 )
 
 RECORD_TYPE_QUESTION = (
@@ -130,6 +137,10 @@ def determine_next_question(record) -> Optional[Tuple[str, str, dict]]:
     # parsers that already extracted it skip this step.
     if not record.amount or float(record.amount) <= 0:
         return ("ask_amount", AMOUNT_QUESTION, {})
+    # Currency comes right after amount. WhatsApp providers seed it from
+    # the family default, so this step usually only fires on Telegram.
+    if not (getattr(record, "currency", None) or "").strip():
+        return ("ask_currency", CURRENCY_QUESTION, CURRENCY_OPTIONS)
     if rt == "expense":
         if not record.category:
             return ("ask_category", CATEGORY_QUESTION, CATEGORY_OPTIONS)
@@ -164,6 +175,7 @@ def resolve_answer(step: str, answer: str):
     key = answer.strip().upper()[:1]
     mapping = {
         "ask_record_type": RECORD_TYPE_OPTIONS,
+        "ask_currency": CURRENCY_OPTIONS,
         "ask_category": CATEGORY_OPTIONS,
         "ask_payment_method": PAYMENT_OPTIONS,
         "ask_savings_source": ACCOUNT_OPTIONS,  # legacy alias

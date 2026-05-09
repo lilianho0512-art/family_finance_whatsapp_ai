@@ -17,6 +17,7 @@
       <a class="btn btn-outline-light btn-sm" href="/loans">Loans</a>
       <a class="btn btn-outline-light btn-sm" href="/reminders">Reminders</a>
       <a class="btn btn-outline-light btn-sm" href="/reports">Reports</a>
+      <a class="btn btn-outline-light btn-sm" href="/settings">Settings</a>
       <a class="btn btn-warning btn-sm" href="/export/monthly">Export Excel</a>
     </div>
   </div>
@@ -43,7 +44,7 @@
         <td>{{ r.date }}</td>
         <td>{{ r.record_type }}</td>
         <td>{{ r.merchant or '-' }}</td>
-        <td>RM {{ "%.2f"|format(r.amount or 0) }}</td>
+        <td>{{ (r.amount or 0)|money(r.currency or 'MYR') }}</td>
         <td>{{ r.category or '-' }}</td>
         <td>{{ r.payment_method or '-' }}</td>
         <td>{{ r.source or '-' }}</td>

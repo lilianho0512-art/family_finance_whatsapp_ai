@@ -34,6 +34,7 @@ class UpcomingItem:
     name: str
     amount: float
     due_date: date
+    currency: str = "MYR"
 
 
 # ---------------------------------------------------------------------------
@@ -97,6 +98,7 @@ def upcoming_for_family(
             items.append(UpcomingItem(
                 family_id=family_id, target_type="loan", target_id=l.id,
                 name=l.lender, amount=float(l.monthly_payment or 0), due_date=due,
+                currency=(l.currency or "MYR"),
             ))
 
     recurring = (
@@ -110,6 +112,7 @@ def upcoming_for_family(
             items.append(UpcomingItem(
                 family_id=family_id, target_type="recurring", target_id=r.id,
                 name=r.name, amount=float(r.amount or 0), due_date=due,
+                currency=(r.currency or "MYR"),
             ))
 
     items.sort(key=lambda x: (x.due_date, x.target_type, x.target_id))
@@ -124,16 +127,11 @@ def upcoming_for_family(
 def format_message(item: UpcomingItem, kind: str) -> str:
     """Compose the reminder text the user receives."""
     label = "Loan" if item.target_type == "loan" else "Bill"
-    if kind == "day_of":
-        return (
-            f"🔔 Payment due TODAY ({item.due_date.isoformat()})\n"
-            f"{label}: {item.name}\n"
-            f"Amount: {format_money(item.amount)}"
-        )
+    when = "TODAY" if kind == "day_of" else "TOMORROW"
     return (
-        f"🔔 Payment due TOMORROW ({item.due_date.isoformat()})\n"
+        f"🔔 Payment due {when} ({item.due_date.isoformat()})\n"
         f"{label}: {item.name}\n"
-        f"Amount: {format_money(item.amount)}"
+        f"Amount: {format_money(item.amount, item.currency)}"
     )
 
 
