@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Reminders — Family Finance AI</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="navbar navbar-dark bg-primary mb-3">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/">💰 Family Finance AI</a>
+    <div>
+      <a class="btn btn-outline-light btn-sm" href="/">Dashboard</a>
+      <a class="btn btn-outline-light btn-sm" href="/records">Records</a>
+      <a class="btn btn-outline-light btn-sm" href="/accounts">Accounts</a>
+      <a class="btn btn-outline-light btn-sm" href="/loans">Loans</a>
+      <a class="btn btn-outline-light btn-sm" href="/reminders">Reminders</a>
+      <a class="btn btn-outline-light btn-sm" href="/reports">Reports</a>
+      <a class="btn btn-warning btn-sm" href="/export/monthly">Export Excel</a>
+      <span class="text-light ms-3">{{ user.email }}</span>
+      <a class="btn btn-outline-light btn-sm" href="/auth/logout">Logout</a>
+    </div>
+  </div>
+</nav>
+<div class="container">
+
+  <div class="d-flex justify-content-between align-items-end mb-3">
+    <div>
+      <h3 class="mb-0">Payment reminders</h3>
+      <small class="text-muted">
+        Reminders fire automatically at 09:00 — once the day before, once on the due day.
+        Sent to every WhatsApp/Telegram number bound to this family.
+      </small>
+    </div>
+    <form method="post" action="/reminders/run-now" class="d-inline"
+          onsubmit="return confirm('Send any due reminders now? Already-sent items will be skipped.');">
+      <button class="btn btn-outline-primary btn-sm" type="submit">▶ Run now</button>
+    </form>
+  </div>
+
+  {# ---- Upcoming (next 14 days) ---- #}
+  <h5>Upcoming (next 14 days)</h5>
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>Due</th><th>Days away</th><th>Type</th><th>Name</th>
+        <th class="text-end">Amount</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for u in upcoming %}
+      {% set delta = (u.due_date - today).days %}
+      <tr class="{% if delta == 0 %}table-warning{% elif delta == 1 %}table-info{% endif %}">
+        <td><strong>{{ u.due_date }}</strong></td>
+        <td>
+          {% if delta == 0 %}<span class="badge bg-warning text-dark">Today</span>
+          {% elif delta == 1 %}<span class="badge bg-info">Tomorrow</span>
+          {% else %}in {{ delta }} days
+          {% endif %}
+        </td>
+        <td>
+          {% if u.target_type == 'loan' %}
+            <span class="badge bg-secondary">Loan</span>
+          {% else %}
+            <span class="badge bg-light text-dark">Bill</span>
+          {% endif %}
+        </td>
+        <td>{{ u.name }}</td>
+        <td class="text-end">RM {{ "%.2f"|format(u.amount) }}</td>
+        <td>
+          {% if u.target_type == 'loan' %}
+            <a class="small" href="/loans">manage</a>
+          {% else %}
+            <a class="small" href="#recurring-{{ u.target_id }}">manage</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="text-muted">No payments due in the next 14 days.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <hr class="my-4">
+
+  {# ---- Recurring expenses CRUD ---- #}
+  <div class="d-flex justify-content-between align-items-end mb-2">
+    <h5 class="mb-0">Recurring expenses</h5>
+    <small class="text-muted">Total monthly (active): <strong>RM {{ "%.2f"|format(monthly_total) }}</strong></small>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body">
+      <h6 class="card-title">Add a recurring expense</h6>
+      <form method="post" action="/reminders/recurring" class="row g-2">
+        <div class="col-md-3">
+          <label class="form-label">Name</label>
+          <input class="form-control form-control-sm" name="name" required placeholder="TNB Electric / Netflix">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Amount (RM)</label>
+          <input type="number" step="0.01" class="form-control form-control-sm" name="amount" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Due day (1–31)</label>
+          <input type="number" min="1" max="31" class="form-control form-control-sm" name="payment_due_day" required>
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Category</label>
+          <input class="form-control form-control-sm" name="category" placeholder="Utilities">
+        </div>
+        <div class="col-md-2">
+          <label class="form-label">Account</label>
+          <input class="form-control form-control-sm" name="account" placeholder="Maybank">
+        </div>
+        <div class="col-md-1 d-flex align-items-end">
+          <button class="btn btn-success btn-sm w-100" type="submit">Add</button>
+        </div>
+        <div class="col-12">
+          <input class="form-control form-control-sm" name="notes" placeholder="Notes (optional)">
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <table class="table table-sm align-middle">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th class="text-end">Amount</th>
+        <th>Due day</th>
+        <th>Category</th>
+        <th>Account</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in recurring %}
+      <tr id="recurring-{{ r.id }}" class="{% if r.status == 'paused' %}text-muted{% endif %}">
+        <form method="post" action="/reminders/recurring/{{ r.id }}">
+          <td><input class="form-control form-control-sm" name="name" value="{{ r.name }}" required></td>
+          <td><input type="number" step="0.01" class="form-control form-control-sm text-end" name="amount" value="{{ r.amount }}" required></td>
+          <td><input type="number" min="1" max="31" class="form-control form-control-sm" name="payment_due_day" value="{{ r.payment_due_day }}" required></td>
+          <td><input class="form-control form-control-sm" name="category" value="{{ r.category or '' }}"></td>
+          <td><input class="form-control form-control-sm" name="account" value="{{ r.account or '' }}"></td>
+          <td>
+            <select class="form-select form-select-sm" name="status">
+              <option value="active" {% if r.status == 'active' %}selected{% endif %}>Active</option>
+              <option value="paused" {% if r.status == 'paused' %}selected{% endif %}>Paused</option>
+            </select>
+            <input type="hidden" name="notes" value="{{ r.notes or '' }}">
+          </td>
+          <td>
+            <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+        </form>
+        <form method="post" action="/reminders/recurring/{{ r.id }}/delete" class="d-inline"
+              onsubmit="return confirm('Delete recurring expense {{ r.name }}?');">
+          <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+        </form>
+          </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="7" class="text-muted">No recurring expenses yet. Add one above.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <hr class="my-4">
+
+  {# ---- Reminder history ---- #}
+  <h5>Recent reminders sent (last 30)</h5>
+  <table class="table table-sm">
+    <thead>
+      <tr><th>Sent at</th><th>Type</th><th>Target</th><th>Due</th><th>Kind</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+    {% for h in history %}
+      <tr>
+        <td><small>{{ h.sent_at.strftime('%Y-%m-%d %H:%M') if h.sent_at else '' }}</small></td>
+        <td>{{ h.target_type }}</td>
+        <td>#{{ h.target_id }}</td>
+        <td>{{ h.due_date }}</td>
+        <td>
+          {% if h.kind == 'day_of' %}<span class="badge bg-warning text-dark">Day-of</span>
+          {% else %}<span class="badge bg-info">Day-before</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if h.status == 'sent' %}<span class="badge bg-success">Sent</span>
+          {% else %}<span class="badge bg-danger">{{ h.status }}</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="6" class="text-muted">No reminders sent yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+</div>
+</body>
+</html>

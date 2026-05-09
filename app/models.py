@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, Date, Text, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date, Text, ForeignKey, Boolean, UniqueConstraint
 from app.database import Base
 
 
@@ -116,6 +116,44 @@ class Loan(Base):
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class RecurringExpense(Base):
+    """Generic recurring expenses (utilities, rent, subscriptions). Loans are
+    tracked separately in the `loans` table and reminded on alongside these."""
+    __tablename__ = "recurring_expenses"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    family_id = Column(Integer, ForeignKey("families.id"), nullable=False, index=True)
+    name = Column(String(120), nullable=False)
+    amount = Column(Float, nullable=False, default=0.0)
+    payment_due_day = Column(Integer, nullable=False)  # 1..31, clamped to month-end
+    category = Column(String(100), nullable=True)      # for the eventual expense record
+    account = Column(String(80), nullable=True)
+    status = Column(String(20), nullable=False, default="active")  # active | paused
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class PaymentReminder(Base):
+    """Audit log for reminders we've already sent. The unique constraint
+    prevents the daily scheduler from notifying twice for the same item+date+kind."""
+    __tablename__ = "payment_reminders"
+    __table_args__ = (
+        UniqueConstraint(
+            "family_id", "target_type", "target_id", "due_date", "kind",
+            name="uq_payment_reminder_dedup",
+        ),
+    )
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    family_id = Column(Integer, ForeignKey("families.id"), nullable=False, index=True)
+    target_type = Column(String(20), nullable=False)   # 'loan' | 'recurring'
+    target_id = Column(Integer, nullable=False)
+    due_date = Column(Date, nullable=False)
+    kind = Column(String(20), nullable=False)          # 'day_before' | 'day_of'
+    sent_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    status = Column(String(20), default="sent")        # sent | failed
+    message = Column(Text, nullable=True)
 
 
 class BugLog(Base):

@@ -2,7 +2,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Family
-from app.services import excel_export, report_service
+from app.services import excel_export, report_service, reminder_service
 from app.utils.logger import logger
 
 _scheduler = None
@@ -41,6 +41,13 @@ def _monthly_job():
         db.close()
 
 
+def _reminders_job():
+    try:
+        reminder_service.run_daily_reminders()
+    except Exception as e:
+        logger.error(f"reminders_job failed: {e}")
+
+
 def start():
     global _scheduler
     if _scheduler is not None:
@@ -49,8 +56,9 @@ def start():
         _scheduler = BackgroundScheduler(timezone=settings.TIMEZONE)
         _scheduler.add_job(_daily_job, "cron", hour=22, minute=0, id="daily_summary")
         _scheduler.add_job(_monthly_job, "cron", day=1, hour=1, minute=0, id="monthly_export")
+        _scheduler.add_job(_reminders_job, "cron", hour=9, minute=0, id="payment_reminders")
         _scheduler.start()
-        logger.info("Scheduler started (daily 22:00, monthly day-1 01:00)")
+        logger.info("Scheduler started (daily 22:00, monthly day-1 01:00, reminders 09:00)")
     except Exception as e:
         logger.error(f"Scheduler failed to start: {e}")
         _scheduler = None

@@ -6,7 +6,7 @@ from app.config import settings
 from app.database import init_db, run_migrations
 from app.services.self_healing_service import ensure_folders, health_summary
 from app.services import scheduler_service
-from app.routers import whatsapp, dashboard, records, reports, export, auth, admin, accounts, loans
+from app.routers import whatsapp, dashboard, records, reports, export, auth, admin, accounts, loans, reminders
 from app.utils.logger import logger
 
 
@@ -44,6 +44,7 @@ app.include_router(dashboard.router, tags=["dashboard"])
 app.include_router(records.router, tags=["records"])
 app.include_router(accounts.router, tags=["accounts"])
 app.include_router(loans.router, tags=["loans"])
+app.include_router(reminders.router, tags=["reminders"])
 app.include_router(reports.router, tags=["reports"])
 app.include_router(export.router, tags=["export"])
 

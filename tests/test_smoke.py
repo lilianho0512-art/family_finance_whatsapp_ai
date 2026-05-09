@@ -324,3 +324,143 @@ def test_excel_export_includes_loans_sheet(tmp_path, monkeypatch):
     assert "Lender" in header and "Monthly Payment" in header
     body = [r for r in rows[1:] if r[0] is not None]  # skip totals padding
     assert any(r[2] == "LoanZ" for r in body)
+
+
+# ---------------------------------------------------------------------------
+# Reminder service: compute_next_due + dedup
+# ---------------------------------------------------------------------------
+
+
+def test_compute_next_due_same_month():
+    from datetime import date as _d
+    from app.services.reminder_service import compute_next_due
+    # today=May 9, due_day=10 -> next due is May 10
+    assert compute_next_due(10, _d(2026, 5, 9)) == _d(2026, 5, 10)
+    # today=May 10 (the due day) -> still today
+    assert compute_next_due(10, _d(2026, 5, 10)) == _d(2026, 5, 10)
+
+
+def test_compute_next_due_rolls_to_next_month():
+    from datetime import date as _d
+    from app.services.reminder_service import compute_next_due
+    # today=May 11, due_day=10 -> rolled to June 10
+    assert compute_next_due(10, _d(2026, 5, 11)) == _d(2026, 6, 10)
+    # today=Dec 31 due_day=5 -> Jan 5 next year
+    assert compute_next_due(5, _d(2026, 12, 31)) == _d(2027, 1, 5)
+
+
+def test_compute_next_due_clamps_short_months():
+    from datetime import date as _d
+    from app.services.reminder_service import compute_next_due
+    # due_day=31 in February -> Feb 28 (non-leap 2026)
+    assert compute_next_due(31, _d(2026, 2, 1)) == _d(2026, 2, 28)
+    # due_day=31 in April -> April 30
+    assert compute_next_due(31, _d(2026, 4, 1)) == _d(2026, 4, 30)
+    # day after April 30 with due_day=31 -> May 31
+    assert compute_next_due(31, _d(2026, 5, 1)) == _d(2026, 5, 31)
+
+
+def test_recurring_expense_crud_and_scoping():
+    from app.services import recurring_expense_service as svc
+    db = _make_db()
+    fa = _make_family(db, "A")
+    fb = _make_family(db, "B")
+    a_item = svc.create_recurring(db, fa.id, name="TNB", amount=120, payment_due_day=10)
+    svc.create_recurring(db, fb.id, name="Netflix", amount=55, payment_due_day=5)
+    assert len(svc.list_recurring(db, fa.id)) == 1
+    assert svc.get_recurring(db, fb.id, a_item.id) is None  # cross-family
+    upd = svc.update_recurring(db, fa.id, a_item.id, amount=130, status="paused")
+    assert upd.amount == 130 and upd.status == "paused"
+    # invalid status ignored
+    upd2 = svc.update_recurring(db, fa.id, a_item.id, status="garbage")
+    assert upd2.status == "paused"
+    # delete
+    assert svc.delete_recurring(db, fa.id, a_item.id) is True
+    assert svc.get_recurring(db, fa.id, a_item.id) is None
+
+
+def test_recurring_due_day_clamped():
+    from app.services import recurring_expense_service as svc
+    db = _make_db()
+    fam = _make_family(db)
+    # 99 should clamp to 31 (model takes a month-agnostic 1..31)
+    item = svc.create_recurring(db, fam.id, name="X", amount=10, payment_due_day=99)
+    assert item.payment_due_day == 31
+    item2 = svc.create_recurring(db, fam.id, name="Y", amount=10, payment_due_day=0)
+    assert item2.payment_due_day == 1
+
+
+def test_reminder_run_dedup(monkeypatch):
+    """Calling run_for_family twice on the same day must not double-send.
+    Stub send_text so we can count calls without hitting the network."""
+    from datetime import date as _d
+    from app.services import recurring_expense_service as svc
+    from app.services import reminder_service
+    from app.models import WhatsappEnrollment
+
+    db = _make_db()
+    fam = _make_family(db)
+    # one enrollment so messages get a target
+    db.add(WhatsappEnrollment(family_id=fam.id, whatsapp_number="60123"))
+    db.commit()
+    # bill due tomorrow
+    today = _d(2026, 5, 9)
+    svc.create_recurring(db, fam.id, name="TNB", amount=88, payment_due_day=10)
+
+    sends = []
+    monkeypatch.setattr(
+        reminder_service.whatsapp_service,
+        "send_text",
+        lambda num, body: (sends.append((num, body)) or True),
+    )
+
+    sent1, dup1 = reminder_service.run_for_family(db, fam.id, today=today)
+    assert (sent1, dup1) == (1, 0)
+    assert len(sends) == 1
+    assert "TOMORROW" in sends[0][1]
+
+    # Second call same day -> all skipped as dup
+    sent2, dup2 = reminder_service.run_for_family(db, fam.id, today=today)
+    assert (sent2, dup2) == (0, 1)
+    assert len(sends) == 1  # no new sends
+
+
+def test_reminder_day_of_message(monkeypatch):
+    from datetime import date as _d
+    from app.services import loan_service, reminder_service
+    from app.models import WhatsappEnrollment
+
+    db = _make_db()
+    fam = _make_family(db)
+    db.add(WhatsappEnrollment(family_id=fam.id, whatsapp_number="60999"))
+    db.commit()
+    loan_service.create_loan(
+        db, fam.id, lender="Maybank", principal=300000, monthly_payment=1500,
+        payment_due_day=9,  # today
+    )
+    sends = []
+    monkeypatch.setattr(
+        reminder_service.whatsapp_service,
+        "send_text",
+        lambda num, body: (sends.append(body) or True),
+    )
+    sent, dup = reminder_service.run_for_family(db, fam.id, today=_d(2026, 5, 9))
+    assert sent == 1 and dup == 0
+    assert "TODAY" in sends[0]
+    assert "Maybank" in sends[0]
+    assert "MYR 1500.00" in sends[0]
+
+
+def test_upcoming_for_family_combines_loans_and_recurring():
+    from datetime import date as _d
+    from app.services import loan_service, recurring_expense_service as svc, reminder_service
+    db = _make_db()
+    fam = _make_family(db)
+    loan_service.create_loan(db, fam.id, lender="A", principal=100, monthly_payment=10, payment_due_day=10)
+    svc.create_recurring(db, fam.id, name="TNB", amount=88, payment_due_day=15)
+    items = reminder_service.upcoming_for_family(db, fam.id, today=_d(2026, 5, 1), days_ahead=30)
+    types = sorted([(i.target_type, i.name) for i in items])
+    assert ("loan", "A") in types
+    assert ("recurring", "TNB") in types
+    # Sorted earliest-first
+    assert items[0].due_date <= items[1].due_date
