@@ -542,11 +542,11 @@ def _try_handle_account_command(db, family_id, text: str):
 
 
 _QUERY_PATTERNS = [
-    (re.compile(r"this\s+month.*(spend|spent|expense|expenses)", re.IGNORECASE), "month_expense"),
-    (re.compile(r"this\s+month.*(saving|savings|saved)", re.IGNORECASE), "month_savings"),
-    (re.compile(r"this\s+month.*(income|salary|earn|earned)", re.IGNORECASE), "month_income"),
+    (re.compile(r"(?=.*this\s+month)(?=.*(?:spend|spent|expense|expenses))", re.IGNORECASE), "month_expense"),
+    (re.compile(r"(?=.*this\s+month)(?=.*(?:saving|savings|saved))", re.IGNORECASE), "month_savings"),
+    (re.compile(r"(?=.*this\s+month)(?=.*(?:income|salary|earn|earned))", re.IGNORECASE), "month_income"),
     (re.compile(r"savings\s+rate", re.IGNORECASE), "savings_rate"),
-    (re.compile(r"today.*(spend|spent|expense|expenses)", re.IGNORECASE), "today_expense"),
+    (re.compile(r"(?=.*today)(?=.*(?:spend|spent|expense|expenses))", re.IGNORECASE), "today_expense"),
     (re.compile(r"\bsummary\b", re.IGNORECASE), "month_summary"),
     (re.compile(r"\bexport\b", re.IGNORECASE), "export"),
 ]
