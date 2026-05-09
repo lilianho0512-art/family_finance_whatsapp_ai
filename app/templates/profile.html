@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Profile — Family Finance AI</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="navbar navbar-dark bg-primary mb-3">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/">💰 Family Finance AI</a>
+    <div>
+      <a class="btn btn-outline-light btn-sm" href="/">Dashboard</a>
+      <a class="btn btn-outline-light btn-sm" href="/records">Records</a>
+      <a class="btn btn-outline-light btn-sm" href="/accounts">Accounts</a>
+      <a class="btn btn-outline-light btn-sm" href="/loans">Loans</a>
+      <a class="btn btn-outline-light btn-sm" href="/reminders">Reminders</a>
+      <a class="btn btn-outline-light btn-sm" href="/reports">Reports</a>
+      <a class="btn btn-outline-light btn-sm" href="/settings">Settings</a>
+      <div class="dropdown d-inline-block ms-3">
+        <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+          {{ user.email }}
+        </button>
+        <ul class="dropdown-menu dropdown-menu-end">
+          <li><a class="dropdown-item" href="/profile">Profile</a></li>
+          <li><hr class="dropdown-divider"></li>
+          <li><a class="dropdown-item" href="/auth/logout">Logout</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</nav>
+<div class="container" style="max-width: 760px;">
+  <h3>Your profile</h3>
+
+  {% if saved %}<div class="alert alert-success">Password updated.</div>{% endif %}
+  {% if added %}<div class="alert alert-success">Number linked to your account.</div>{% endif %}
+  {% if removed %}<div class="alert alert-info">Number removed.</div>{% endif %}
+  {% if error %}<div class="alert alert-danger">{{ error }}</div>{% endif %}
+
+  {# ---- Basic info ---- #}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title">Account</h5>
+      <table class="table table-sm mb-0">
+        <tr><th style="width: 200px">Email</th><td>{{ user.email }}</td></tr>
+        <tr><th>Role</th>
+          <td>
+            <span class="badge bg-secondary">{{ user.role }}</span>
+            {% if user.is_superadmin %}<span class="badge bg-danger ms-1">superadmin</span>{% endif %}
+          </td>
+        </tr>
+        <tr><th>Family</th><td>{{ family.name }} <small class="text-muted">(id={{ family.id }})</small></td></tr>
+        <tr><th>Default currency</th>
+          <td>{{ family.default_currency }}
+            <a class="small ms-2" href="/settings">change in Settings</a>
+          </td>
+        </tr>
+        <tr><th>Account created</th><td><small>{{ user.created_at.strftime('%Y-%m-%d %H:%M UTC') if user.created_at else '—' }}</small></td></tr>
+      </table>
+    </div>
+  </div>
+
+  {# ---- Linked WhatsApp / Telegram numbers ---- #}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title">Linked WhatsApp / Telegram numbers</h5>
+      <p class="text-muted small mb-2">
+        Numbers (or Telegram chat IDs) that route to your family. The bot uses
+        these to authenticate incoming messages.
+      </p>
+      <table class="table table-sm">
+        <thead><tr><th>Number / Chat ID</th><th>Label</th><th>Owner</th><th></th></tr></thead>
+        <tbody>
+        {% for e in enrollments %}
+          <tr>
+            <td><code>{{ e.whatsapp_number }}</code></td>
+            <td>{{ e.label or '—' }}</td>
+            <td>
+              {% if e.user_id == user.id %}
+                <span class="badge bg-success">you</span>
+              {% elif e.user_id is none %}
+                <span class="badge bg-light text-dark">unclaimed</span>
+              {% else %}
+                <span class="badge bg-secondary">user #{{ e.user_id }}</span>
+              {% endif %}
+            </td>
+            <td>
+              <form method="post" action="/profile/whatsapp/{{ e.id }}/delete" class="d-inline"
+                    onsubmit="return confirm('Remove {{ e.whatsapp_number }} from this family?');">
+                <button class="btn btn-sm btn-outline-danger">Remove</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="text-muted">No numbers linked yet.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <form method="post" action="/profile/whatsapp" class="row g-2 align-items-end mt-2">
+        <div class="col-md-6">
+          <label class="form-label">WhatsApp number / Telegram chat ID</label>
+          <input class="form-control form-control-sm" name="whatsapp_number"
+                 placeholder="60123456789" required>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Label (optional)</label>
+          <input class="form-control form-control-sm" name="label"
+                 placeholder="My phone">
+        </div>
+        <div class="col-md-2">
+          <button class="btn btn-primary btn-sm w-100" type="submit">Add</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  {# ---- Change password ---- #}
+  <div class="card mb-3">
+    <div class="card-body">
+      <h5 class="card-title">Change password</h5>
+      <form method="post" action="/profile/password" class="row g-2">
+        <div class="col-md-12">
+          <label class="form-label">Current password</label>
+          <input type="password" class="form-control form-control-sm" name="old_password" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">New password (≥ 6 chars)</label>
+          <input type="password" class="form-control form-control-sm" name="new_password" required minlength="6">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Confirm new password</label>
+          <input type="password" class="form-control form-control-sm" name="confirm_password" required minlength="6">
+        </div>
+        <div class="col-12">
+          <button class="btn btn-primary btn-sm" type="submit">Update password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+</body>
+</html>

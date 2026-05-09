@@ -567,6 +567,49 @@ def test_recurring_service_currency_normalization():
     assert upd.currency == "MYR"
 
 
+def test_change_password_happy_path():
+    from app.services import auth_service
+    from app.models import User
+    db = _make_db()
+    fam = _make_family(db)
+    user = User(family_id=fam.id, email="x@x.com",
+                password_hash=auth_service.hash_password("oldpass1"), role="admin")
+    db.add(user); db.commit(); db.refresh(user)
+    ok, err = auth_service.change_password(db, user, "oldpass1", "newpass2")
+    assert ok and err == ""
+    assert auth_service.verify_password("newpass2", user.password_hash)
+    assert not auth_service.verify_password("oldpass1", user.password_hash)
+
+
+def test_change_password_wrong_current():
+    from app.services import auth_service
+    from app.models import User
+    db = _make_db()
+    fam = _make_family(db)
+    user = User(family_id=fam.id, email="x@x.com",
+                password_hash=auth_service.hash_password("oldpass1"), role="admin")
+    db.add(user); db.commit(); db.refresh(user)
+    ok, err = auth_service.change_password(db, user, "wrong", "newpass2")
+    assert not ok
+    assert "incorrect" in err.lower()
+    # hash unchanged
+    assert auth_service.verify_password("oldpass1", user.password_hash)
+
+
+def test_change_password_too_short():
+    from app.services import auth_service
+    from app.models import User
+    db = _make_db()
+    fam = _make_family(db)
+    user = User(family_id=fam.id, email="x@x.com",
+                password_hash=auth_service.hash_password("oldpass1"), role="admin")
+    db.add(user); db.commit(); db.refresh(user)
+    ok, err = auth_service.change_password(db, user, "oldpass1", "abc")
+    assert not ok
+    assert "6" in err  # message mentions the minimum
+    assert auth_service.verify_password("oldpass1", user.password_hash)
+
+
 def test_field_map_covers_every_question_step():
     """Regression for the ask_currency loop bug: every step that
     determine_next_question can return must have a field_map entry,

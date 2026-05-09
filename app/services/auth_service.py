@@ -46,6 +46,19 @@ def get_user_by_email(db: Session, email: str) -> Optional[User]:
     return db.query(User).filter(User.email == email.lower().strip()).first()
 
 
+def change_password(db: Session, user: User, old_password: str, new_password: str) -> tuple[bool, str]:
+    """Verify old password, set a new bcrypt hash, commit. Returns (ok, error_msg)."""
+    if not user:
+        return False, "user not found"
+    if not verify_password(old_password, user.password_hash):
+        return False, "Current password is incorrect"
+    if len(new_password or "") < 6:
+        return False, "New password must be at least 6 characters"
+    user.password_hash = hash_password(new_password)
+    db.commit()
+    return True, ""
+
+
 def get_family(db: Session, family_id: int) -> Optional[Family]:
     return db.query(Family).get(family_id) if family_id else None
 
