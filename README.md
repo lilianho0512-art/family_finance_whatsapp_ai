@@ -11,10 +11,11 @@ Production-ready WhatsApp AI assistant for family finances:
 - Auto A/B/C/D follow-up questions, remembering which record each user is currently filling
 - Auto-classifies: expense, savings, income, transfer
 - In-WhatsApp queries: this month's expenses / savings / income / savings rate / category / merchant
-- Bootstrap Dashboard / Records / Accounts / **Loans** / Reports
+- Bootstrap Dashboard / Records / Accounts / **Loans** / **Reminders** / Reports
 - **Loans & payment plans** — track loans and BNPL/installment plans with monthly payment + balance
+- **Payment reminders** — auto-fires day-before + day-of reminders for active loans and recurring bills, sent to every enrolled WhatsApp/Telegram number
 - Excel monthly export (Summary / Expenses / Savings / Income / Category / Cashflow / Need Review / **Loans**)
-- APScheduler runs at 22:00 daily and 01:00 on the first of each month
+- APScheduler: daily summary 22:00, monthly export day-1 01:00, **payment reminders 09:00**
 - Self-healing: missing folders auto-created, AI offline → rule_parser, JSON repair, WhatsApp send retried 3x, all errors written to logs + bug_logs
 
 ---
@@ -199,6 +200,7 @@ Open in the browser after startup:
 | Records | http://localhost:8000/records |
 | Accounts | http://localhost:8000/accounts |
 | Loans / payment plans | http://localhost:8000/loans |
+| Reminders | http://localhost:8000/reminders |
 | Reports | http://localhost:8000/reports |
 | Excel monthly report | http://localhost:8000/export/monthly |
 | Health | http://localhost:8000/health |
@@ -230,6 +232,47 @@ plus the same totals.
 Family-scoped: each row belongs to one family and never leaks across
 `/admin` boundaries.
 
+### 4.2 Payment reminders (`/reminders`)
+
+Auto-reminds every enrolled WhatsApp/Telegram number when a loan or
+recurring bill is due. Works alongside `/loans` — loans inherit reminders
+automatically from `payment_due_day`; bills (utilities, subscriptions, rent)
+get tracked in a separate `recurring_expenses` table you manage on this page.
+
+**Schedule.** APScheduler fires at 09:00 family-local time every day and
+sends two reminders per cycle:
+
+| Kind | Fires when | Message |
+|---|---|---|
+| `day_before` | due_date == today + 1 | "🔔 Payment due TOMORROW (date) Bill/Loan: name Amount: …" |
+| `day_of`     | due_date == today     | "🔔 Payment due TODAY (date) Bill/Loan: name Amount: …" |
+
+**Dedup.** A `UNIQUE(family_id, target_type, target_id, due_date, kind)`
+constraint on `payment_reminders` prevents double-sending. Manual
+`POST /reminders/run-now` and the scheduled 09:00 run share the same
+dedup, so you can safely re-trigger.
+
+**Date math.** `compute_next_due` handles month rollovers and short
+months — `payment_due_day=31` correctly resolves to Feb 28 / Apr 30 /
+the actual last day of any month.
+
+**The page** at `/reminders` has three sections:
+
+1. **Upcoming (next 14 days)** — combined view of loans + recurring bills
+   with `Today` / `Tomorrow` / `in N days` badges. Today's items are
+   highlighted yellow, tomorrow's blue.
+2. **Recurring expenses CRUD** — add/edit/pause/delete recurring bills
+   inline. Fields: `name`, `amount`, `payment_due_day` (1–31, clamped),
+   `category`, `account`, `notes`, `status` (active / paused).
+3. **Reminder history** — last 30 reminders sent with status badges.
+
+**▶ Run now** button at the top of the page manually fires today's pass
+for this family — useful for testing without waiting for 09:00.
+
+Failures (no Telegram bot token, network error, etc.) keep the dedup
+row but flip its status to `failed` so the audit log surfaces them
+instead of silently retrying every 9am.
+
 ---
 
 ## 5. Self-healing behaviors
@@ -258,7 +301,7 @@ family_finance_whatsapp_ai/
 │   ├── main.py                  # FastAPI entrypoint
 │   ├── config.py
 │   ├── database.py
-│   ├── models.py                # FinancialRecord / Conversation / Loan / BugLog
+│   ├── models.py                # FinancialRecord / Conversation / Loan / RecurringExpense / PaymentReminder / BugLog
 │   ├── schemas.py
 │   ├── routers/
 │   │   ├── whatsapp.py          # GET verify + POST receive (Meta / Telegram / Green API)
@@ -266,6 +309,7 @@ family_finance_whatsapp_ai/
 │   │   ├── records.py
 │   │   ├── accounts.py
 │   │   ├── loans.py             # /loans CRUD
+│   │   ├── reminders.py         # /reminders CRUD + run-now
 │   │   ├── reports.py
 │   │   ├── admin.py
 │   │   ├── auth.py
@@ -278,11 +322,13 @@ family_finance_whatsapp_ai/
 │   │   ├── record_service.py
 │   │   ├── account_service.py
 │   │   ├── loan_service.py      # Loan CRUD, family-scoped
+│   │   ├── recurring_expense_service.py  # Recurring-bill CRUD
+│   │   ├── reminder_service.py  # compute_next_due, run_daily_reminders, dedup
 │   │   ├── question_engine.py   # A/B/C + ask_amount question bank
 │   │   ├── conversation_memory.py
 │   │   ├── report_service.py
 │   │   ├── excel_export.py      # adds Loans sheet
-│   │   ├── scheduler_service.py
+│   │   ├── scheduler_service.py # 22:00 summary, day-1 01:00 export, 09:00 reminders
 │   │   ├── auto_bug_checker.py  # @safe decorator + log_bug
 │   │   ├── self_healing_service.py
 │   │   └── menu_service.py
@@ -378,6 +424,8 @@ Multi-tenant isolation + JWT login is on:
 | `conversations.family_id` | Conversation state isolated by family too |
 | `bank_accounts` / `account_balances` | Per-family ledger and balance snapshots |
 | `loans.family_id` | Loans / installment plans, family-scoped |
+| `recurring_expenses.family_id` | Recurring bills (utilities, subscriptions), family-scoped |
+| `payment_reminders` | Audit log of sent reminders, with UNIQUE constraint for dedup |
 
 **First-time setup:**
 
