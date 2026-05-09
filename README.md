@@ -12,7 +12,7 @@ Production-ready WhatsApp AI assistant for family finances:
 - Auto-classifies: expense, savings, income, transfer
 - In-WhatsApp queries: this month's expenses / savings / income / savings rate / category / merchant
 - Bootstrap Dashboard / Records / Accounts / **Loans** / **Reminders** / Reports / **Settings**
-- **Multi-currency** — 12 currencies (MYR, SGD, USD, EUR, GBP, JPY, AUD, IDR, THB, PHP, HKD, CNY) with family default + per-record/loan/bill override
+- **Multi-currency + FX** — 12 currencies (MYR, SGD, USD, EUR, GBP, JPY, AUD, IDR, THB, PHP, HKD, CNY) with family default + per-record/loan/bill override; aggregate totals on Dashboard / Reports / Excel auto-convert via cached daily FX rates
 - **Loans & payment plans** — track loans and BNPL/installment plans with monthly payment + balance
 - **Payment reminders** — auto-fires day-before + day-of reminders for active loans and recurring bills, sent to every enrolled WhatsApp/Telegram number
 - Excel monthly export (Summary / Expenses / Savings / Income / Category / Cashflow / Need Review / **Loans**)
@@ -275,11 +275,13 @@ Failures (no Telegram bot token, network error, etc.) keep the dedup
 row but flip its status to `failed` so the audit log surfaces them
 instead of silently retrying every 9am.
 
-### 4.3 Multi-currency (`/settings`)
+### 4.3 Multi-currency + FX (`/settings`)
 
 Records, loans, and recurring bills are stored in their **native
-currency** — no FX conversion. Each family has a default currency that
-new rows inherit, and individual rows can override.
+currency**. Each family has a default currency that new rows inherit;
+individual rows can override. Aggregate totals (Dashboard cards, /reports
+list, WhatsApp summary command, Excel Summary sheet) are converted to the
+family default at today's FX rates.
 
 **Supported list (12):** `MYR`, `SGD`, `USD`, `EUR`, `GBP`, `JPY`,
 `AUD`, `IDR`, `THB`, `PHP`, `HKD`, `CNY`. Symbols rendered as
@@ -309,10 +311,27 @@ reminder messages.
 `Loan.currency`, and `RecurringExpense.currency` to `MYR` via
 `server_default`, so legacy rows keep rendering as RM.
 
-> Reports and totals do **not** convert across currencies. A family
-> with mixed-currency loans will see totals summed in the family's
-> default symbol — the breakdown column shows each row's own currency
-> so the discrepancy is visible.
+**FX rates.** Aggregate totals are converted using `app/utils/fx.py`:
+
+- Source: `open.er-api.com` (free, no API key, ECB-backed; covers all 12
+  supported currencies including IDR/THB/PHP).
+- Cache: `data/fx_cache.json`, partitioned by date and base currency.
+  First call for a base hits the API once and caches all 166 rates;
+  subsequent calls for any target with the same base are instant.
+- Daily refresh: tomorrow's call writes a new date bucket — yesterday's
+  cache stays on disk for offline/historical use but isn't read.
+- Fallback: if the API is unreachable, `get_rate` returns 1.0 with a
+  WARNING in `logs/app.log` so totals don't disappear; the FX banner on
+  /reports still tells you the conversion happened.
+- Per-row displays (records list, loans table, reminders list,
+  individual record amounts) **always show the native currency** — only
+  aggregates convert.
+
+> No historical exchange rates: today's rates apply to all dates in the
+> reporting period. Good enough for cashflow snapshots; not appropriate
+> for tax-grade conversion.
+
+The `data/fx_cache.json` file is gitignored — it regenerates on demand.
 
 ---
 
@@ -326,6 +345,7 @@ reminder messages.
 | Gemini not configured | Skipped — Ollama / rule only |
 | Tesseract missing or OCR fails | Marked as `need_review` |
 | WhatsApp send fails | Backoff retry 3× (2 / 4 / 8 seconds) |
+| FX upstream (`open.er-api.com`) unreachable | `fx.get_rate` falls back to 1.0 with a WARNING log; aggregate totals stay non-zero |
 | Webhook parsing throws | Logged to `bug_logs`, still returns 200 to avoid Meta retry storms |
 | Folder missing | `ensure_folders()` recreates it on startup |
 | Amount detection fails | Follow-up question (A/B/C flow) catches it |
@@ -381,7 +401,8 @@ family_finance_whatsapp_ai/
 │       ├── json_tools.py
 │       ├── date_tools.py
 │       ├── money_tools.py       # extract_amount; format_money proxies to currency
-│       └── currency.py          # SUPPORTED_CURRENCIES, format_money, parse_currency_hint
+│       ├── currency.py          # SUPPORTED_CURRENCIES, format_money, parse_currency_hint
+│       └── fx.py                # get_rate / convert / convert_grouped, daily on-disk cache
 ├── tests/test_smoke.py
 ├── uploads/  output/  logs/  data/
 ├── .env.example
