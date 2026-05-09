@@ -4,7 +4,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font
 from sqlalchemy.orm import Session
 from app.config import settings
-from app.services import record_service
+from app.services import record_service, loan_service
 from app.utils.date_tools import month_range
 
 HEADERS = [
@@ -91,6 +91,33 @@ def export_monthly(db: Session, family_id: Optional[int], ref: date = None) -> s
     for r in all_records:
         if r.status in ("need_review", "need_question", "failed"):
             ws_nr.append(_row(r) + [r.missing_fields or ""])
+
+    ws_l = wb.create_sheet("Loans")
+    ws_l.append([
+        "ID", "Kind", "Lender", "Principal", "Current Balance", "Monthly Payment",
+        "Interest Rate %", "Term (months)", "Start Date", "Due Day", "Status", "Notes",
+    ])
+    _bold_header(ws_l)
+    if family_id is not None:
+        loans = loan_service.list_loans(db, family_id)
+        for l in loans:
+            ws_l.append([
+                l.id,
+                l.kind,
+                l.lender,
+                float(l.principal or 0),
+                float(l.current_balance or 0),
+                float(l.monthly_payment or 0),
+                l.interest_rate if l.interest_rate is not None else "",
+                l.term_months or "",
+                l.start_date.isoformat() if l.start_date else "",
+                l.payment_due_day or "",
+                l.status,
+                (l.notes or "")[:200],
+            ])
+        ws_l.append([])
+        ws_l.append(["Total monthly payment (active)", "", "", "", "", loan_service.total_monthly_payment(db, family_id)])
+        ws_l.append(["Total outstanding (active)",     "", "", "", loan_service.total_outstanding(db, family_id)])
 
     settings.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     fam_tag = f"_fam{family_id}" if family_id is not None else ""

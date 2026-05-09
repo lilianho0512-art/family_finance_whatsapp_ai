@@ -97,7 +97,7 @@ async def receive_telegram(request: Request, db: Session = Depends(get_db)):
             return JSONResponse({"status": "ignored"}, status_code=200)
 
         try:
-            _handle_message(db, meta_msg)
+            _handle_message(db, meta_msg, provider="telegram")
         except Exception as inner:
             tb = traceback.format_exc()
             logger.error(f"_handle_message (telegram) error: {inner}\n{tb}")
@@ -155,7 +155,7 @@ async def receive_greenapi(request: Request, db: Session = Depends(get_db)):
             return JSONResponse({"status": "ignored"}, status_code=200)
 
         try:
-            _handle_message(db, meta_msg)
+            _handle_message(db, meta_msg, provider="greenapi")
         except Exception as inner:
             tb = traceback.format_exc()
             logger.error(f"_handle_message (greenapi) error: {inner}\n{tb}")
@@ -239,7 +239,7 @@ def _onboarding_text(from_number: str = "") -> str:
     )
 
 
-def _handle_message(db: Session, msg: dict):
+def _handle_message(db: Session, msg: dict, provider: str = "meta"):
     from_number = msg.get("from") or ""
     msg_id = msg.get("id") or ""
     msg_type = msg.get("type") or ""
@@ -329,6 +329,7 @@ def _handle_message(db: Session, msg: dict):
                 return
             field_map = {
                 "ask_record_type": "record_type",
+                "ask_amount": "amount",
                 "ask_category": "category",
                 "ask_payment_method": "payment_method",
                 "ask_savings_source": "account",  # legacy: now stored as account
@@ -387,31 +388,50 @@ def _handle_message(db: Session, msg: dict):
         return
 
     # 4. parse new record
-    parsed = ai_parser.parse(text)
-    rec = record_service.create_record(
-        db,
-        family_id=family_id,
-        whatsapp_number=from_number,
-        record_type=parsed.get("record_type") or "unknown",
-        date=parse_date(parsed.get("date") or "") or date.today(),
-        merchant=parsed.get("merchant") or "",
-        amount=float(parsed.get("amount") or 0),
-        currency=parsed.get("currency") or "MYR",
-        category=parsed.get("category") or "",
-        payment_method=parsed.get("payment_method") or "",
-        source=parsed.get("source") or "",
-        note=parsed.get("note") or "",
-        source_text=text,
-        source_type=source_type,
-        whatsapp_message_id=msg_id,
-        file_path=file_path,
-        confidence_score=float(parsed.get("confidence_score") or 0.5),
-        status="need_question",
-        missing_fields=",".join(parsed.get("missing_fields") or []),
-        raw_ai_json=safe_json_dumps(parsed),
-    )
-
-    intro = _render_recognition(rec)
+    if provider == "telegram":
+        # Telegram path: skip AI parsing, walk the user through each field one
+        # at a time via the question chain. Original message kept as source_text.
+        rec = record_service.create_record(
+            db,
+            family_id=family_id,
+            whatsapp_number=from_number,
+            record_type="unknown",
+            date=date.today(),
+            amount=0.0,
+            currency="MYR",
+            source_text=text,
+            source_type=source_type,
+            whatsapp_message_id=msg_id,
+            file_path=file_path,
+            status="need_question",
+            missing_fields="record_type,amount",
+        )
+        intro = "Let's record this step by step."
+    else:
+        parsed = ai_parser.parse(text)
+        rec = record_service.create_record(
+            db,
+            family_id=family_id,
+            whatsapp_number=from_number,
+            record_type=parsed.get("record_type") or "unknown",
+            date=parse_date(parsed.get("date") or "") or date.today(),
+            merchant=parsed.get("merchant") or "",
+            amount=float(parsed.get("amount") or 0),
+            currency=parsed.get("currency") or "MYR",
+            category=parsed.get("category") or "",
+            payment_method=parsed.get("payment_method") or "",
+            source=parsed.get("source") or "",
+            note=parsed.get("note") or "",
+            source_text=text,
+            source_type=source_type,
+            whatsapp_message_id=msg_id,
+            file_path=file_path,
+            confidence_score=float(parsed.get("confidence_score") or 0.5),
+            status="need_question",
+            missing_fields=",".join(parsed.get("missing_fields") or []),
+            raw_ai_json=safe_json_dumps(parsed),
+        )
+        intro = _render_recognition(rec)
     nxt = question_engine.determine_next_question(rec)
     if nxt:
         step, qtext, options = nxt

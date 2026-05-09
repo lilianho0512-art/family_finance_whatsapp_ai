@@ -1,4 +1,9 @@
 from typing import Optional, Tuple
+from app.utils.money_tools import extract_amount
+
+AMOUNT_QUESTION = (
+    "How much was it? Reply with the amount (e.g. 88.50, RM 88.50, MYR 123)."
+)
 
 RECORD_TYPE_QUESTION = (
     "Pick a record type:\n"
@@ -121,6 +126,10 @@ def determine_next_question(record) -> Optional[Tuple[str, str, dict]]:
     acc = getattr(record, "account", None)
     if rt == "unknown" or not rt:
         return ("ask_record_type", RECORD_TYPE_QUESTION, RECORD_TYPE_OPTIONS)
+    # Amount is asked right after record_type in the step-by-step flow;
+    # parsers that already extracted it skip this step.
+    if not record.amount or float(record.amount) <= 0:
+        return ("ask_amount", AMOUNT_QUESTION, {})
     if rt == "expense":
         if not record.category:
             return ("ask_category", CATEGORY_QUESTION, CATEGORY_OPTIONS)
@@ -147,6 +156,11 @@ def determine_next_question(record) -> Optional[Tuple[str, str, dict]]:
 def resolve_answer(step: str, answer: str):
     if not answer:
         return None
+    if step == "ask_amount":
+        amt = extract_amount(answer)
+        if amt is None or amt <= 0:
+            return None
+        return amt
     key = answer.strip().upper()[:1]
     mapping = {
         "ask_record_type": RECORD_TYPE_OPTIONS,

@@ -94,6 +94,30 @@ class AccountBalance(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class Loan(Base):
+    """Loans and installment plans (BNPL, credit-card plans, etc.).
+
+    `kind` distinguishes a long-term loan ("loan") from a short-term
+    installment plan ("installment"); both share the same shape.
+    """
+    __tablename__ = "loans"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    family_id = Column(Integer, ForeignKey("families.id"), nullable=False, index=True)
+    kind = Column(String(20), nullable=False, default="loan")  # loan | installment
+    lender = Column(String(120), nullable=False)
+    principal = Column(Float, nullable=False, default=0.0)
+    interest_rate = Column(Float, nullable=True)               # annual %, nullable
+    term_months = Column(Integer, nullable=True)
+    monthly_payment = Column(Float, nullable=False, default=0.0)
+    start_date = Column(Date, nullable=True)
+    payment_due_day = Column(Integer, nullable=True)           # 1..31
+    current_balance = Column(Float, nullable=False, default=0.0)
+    status = Column(String(20), nullable=False, default="active")  # active | closed
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class BugLog(Base):
     __tablename__ = "bug_logs"
     id = Column(Integer, primary_key=True, autoincrement=True)

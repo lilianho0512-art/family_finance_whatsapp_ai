@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Loans — Family Finance AI</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<nav class="navbar navbar-dark bg-primary mb-3">
+  <div class="container-fluid">
+    <a class="navbar-brand" href="/">💰 Family Finance AI</a>
+    <div>
+      <a class="btn btn-outline-light btn-sm" href="/">Dashboard</a>
+      <a class="btn btn-outline-light btn-sm" href="/records">Records</a>
+      <a class="btn btn-outline-light btn-sm" href="/accounts">Accounts</a>
+      <a class="btn btn-outline-light btn-sm" href="/loans">Loans</a>
+      <a class="btn btn-outline-light btn-sm" href="/reports">Reports</a>
+      <a class="btn btn-warning btn-sm" href="/export/monthly">Export Excel</a>
+      <span class="text-light ms-3">{{ user.email }}</span>
+      <a class="btn btn-outline-light btn-sm" href="/auth/logout">Logout</a>
+    </div>
+  </div>
+</nav>
+<div class="container">
+  <div class="d-flex justify-content-between align-items-end mb-3">
+    <div>
+      <h3 class="mb-0">Loans &amp; payment plans</h3>
+      <small class="text-muted">Track active loans and BNPL / installment plans</small>
+    </div>
+    <a class="btn btn-success" href="/loans/new">+ Add loan / plan</a>
+  </div>
+
+  <div class="row g-3 mb-3">
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-muted small">Total monthly payment (active)</div>
+          <div class="h4 mb-0">RM {{ "%.2f"|format(monthly_total) }}</div>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-6">
+      <div class="card">
+        <div class="card-body">
+          <div class="text-muted small">Total outstanding (active)</div>
+          <div class="h4 mb-0">RM {{ "%.2f"|format(outstanding_total) }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <table class="table table-striped table-sm align-middle">
+    <thead>
+      <tr>
+        <th>#</th><th>Kind</th><th>Lender</th>
+        <th class="text-end">Principal</th>
+        <th class="text-end">Balance</th>
+        <th class="text-end">Monthly</th>
+        <th class="text-end">Rate %</th>
+        <th>Term</th>
+        <th>Start</th>
+        <th>Due day</th>
+        <th>Status</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for l in loans %}
+      <tr class="{% if l.status == 'closed' %}text-muted{% endif %}">
+        <td>{{ l.id }}</td>
+        <td>
+          {% if l.kind == 'installment' %}
+            <span class="badge bg-info">Installment</span>
+          {% else %}
+            <span class="badge bg-secondary">Loan</span>
+          {% endif %}
+        </td>
+        <td><strong>{{ l.lender }}</strong>{% if l.notes %}<br><small class="text-muted">{{ l.notes }}</small>{% endif %}</td>
+        <td class="text-end">RM {{ "%.2f"|format(l.principal or 0) }}</td>
+        <td class="text-end">RM {{ "%.2f"|format(l.current_balance or 0) }}</td>
+        <td class="text-end">RM {{ "%.2f"|format(l.monthly_payment or 0) }}</td>
+        <td class="text-end">{% if l.interest_rate is not none %}{{ "%.2f"|format(l.interest_rate) }}{% else %}—{% endif %}</td>
+        <td>{% if l.term_months %}{{ l.term_months }} mo{% else %}—{% endif %}</td>
+        <td>{{ l.start_date or '—' }}</td>
+        <td>{{ l.payment_due_day or '—' }}</td>
+        <td>
+          {% if l.status == 'closed' %}
+            <span class="badge bg-light text-dark">Closed</span>
+          {% else %}
+            <span class="badge bg-success">Active</span>
+          {% endif %}
+        </td>
+        <td>
+          <a class="btn btn-sm btn-outline-primary" href="/loans/{{ l.id }}/edit">Edit</a>
+          {% if l.status == 'active' %}
+            <form method="post" action="/loans/{{ l.id }}/close" class="d-inline"
+                  onsubmit="return confirm('Mark loan #{{ l.id }} ({{ l.lender }}) as closed?');">
+              <button class="btn btn-sm btn-outline-secondary" type="submit">Close</button>
+            </form>
+          {% endif %}
+          <form method="post" action="/loans/{{ l.id }}/delete" class="d-inline"
+                onsubmit="return confirm('Delete loan #{{ l.id }} ({{ l.lender }})? This cannot be undone.');">
+            <button class="btn btn-sm btn-outline-danger" type="submit">Delete</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="12" class="text-muted">No loans or installment plans yet. Click <a href="/loans/new">+ Add</a> to create one.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+</body>
+</html>
