@@ -6,12 +6,14 @@ Production-ready WhatsApp AI assistant for family finances:
 - WhatsApp Cloud API integration (GET verify + POST receive)
 - Send "Hi" for an auto-introduction and feature menu
 - Text / image / PDF input with automatic OCR
-- AI (Ollama / Gemini) + rule-based parsing with two-tier fallback
+- AI (Ollama / Gemini) + rule-based parsing with two-tier fallback (WhatsApp providers)
+- **Telegram bot** — step-by-step prompts (skips AI, asks every field one at a time)
 - Auto A/B/C/D follow-up questions, remembering which record each user is currently filling
 - Auto-classifies: expense, savings, income, transfer
 - In-WhatsApp queries: this month's expenses / savings / income / savings rate / category / merchant
-- Bootstrap Dashboard / Records / Reports
-- Excel monthly export (Summary / Expenses / Savings / Income / Category / Cashflow / Need Review)
+- Bootstrap Dashboard / Records / Accounts / **Loans** / Reports
+- **Loans & payment plans** — track loans and BNPL/installment plans with monthly payment + balance
+- Excel monthly export (Summary / Expenses / Savings / Income / Category / Cashflow / Need Review / **Loans**)
 - APScheduler runs at 22:00 daily and 01:00 on the first of each month
 - Self-healing: missing folders auto-created, AI offline → rule_parser, JSON repair, WhatsApp send retried 3x, all errors written to logs + bug_logs
 
@@ -144,6 +146,14 @@ A. Family expense
 ```
 Reply `A` → asked for category → `A` → asked for payment method → `D` → confirmed ✅
 
+> **Telegram is step-by-step.** When `WHATSAPP_PROVIDER=telegram`, the bot
+> ignores any free-text content and walks the user through every field one
+> at a time: record type → **amount** → category → payment method → account.
+> The original message is saved as `source_text` for context but no fields
+> are extracted from it. Pre-set greetings (`Hi`, `Menu`, `/start`), undo
+> commands (`undo`, `delete #5`), and queries (`this month spent`,
+> `summary`) still work the same as on WhatsApp.
+
 ### 3.3 Savings
 ```
 Today saved RM500
@@ -187,9 +197,38 @@ Open in the browser after startup:
 |---|---|
 | Dashboard | http://localhost:8000/ |
 | Records | http://localhost:8000/records |
+| Accounts | http://localhost:8000/accounts |
+| Loans / payment plans | http://localhost:8000/loans |
 | Reports | http://localhost:8000/reports |
 | Excel monthly report | http://localhost:8000/export/monthly |
 | Health | http://localhost:8000/health |
+
+### 4.1 Loans & payment plans (`/loans`)
+
+Track active loans and BNPL / installment plans alongside your monthly cashflow.
+Each row stores:
+
+| Field | Notes |
+|---|---|
+| `kind` | `loan` (mortgage / car / personal) or `installment` (BNPL, credit-card plan) |
+| `lender` | Free text — e.g. `Maybank Home Loan`, `Shopee SPayLater` |
+| `principal` | Original loan amount |
+| `current_balance` | Defaults to principal; update manually as you pay down |
+| `monthly_payment` | This month's scheduled payment |
+| `interest_rate` | Annual %, optional |
+| `term_months` | Optional |
+| `start_date`, `payment_due_day` | Optional |
+| `status` | `active` or `closed` |
+
+The list page shows two summary cards: **Total monthly payment (active)** and
+**Total outstanding (active)** — quick view of how much your loans cost you each
+month and how much principal is left.
+
+The monthly Excel export adds a **Loans** sheet with one row per active loan
+plus the same totals.
+
+Family-scoped: each row belongs to one family and never leaks across
+`/admin` boundaries.
 
 ---
 
@@ -219,24 +258,30 @@ family_finance_whatsapp_ai/
 │   ├── main.py                  # FastAPI entrypoint
 │   ├── config.py
 │   ├── database.py
-│   ├── models.py                # FinancialRecord / Conversation / BugLog
+│   ├── models.py                # FinancialRecord / Conversation / Loan / BugLog
 │   ├── schemas.py
 │   ├── routers/
-│   │   ├── whatsapp.py          # GET verify + POST receive
+│   │   ├── whatsapp.py          # GET verify + POST receive (Meta / Telegram / Green API)
 │   │   ├── dashboard.py
 │   │   ├── records.py
+│   │   ├── accounts.py
+│   │   ├── loans.py             # /loans CRUD
 │   │   ├── reports.py
+│   │   ├── admin.py
+│   │   ├── auth.py
 │   │   └── export.py
 │   ├── services/
 │   │   ├── whatsapp_service.py  # send text + download media + retry
-│   │   ├── ai_parser.py         # Ollama → Gemini → rule
+│   │   ├── ai_parser.py         # Ollama → Gemini → rule (skipped on Telegram)
 │   │   ├── rule_parser.py
 │   │   ├── ocr_service.py
 │   │   ├── record_service.py
-│   │   ├── question_engine.py   # A/B/C question bank + answer parsing
+│   │   ├── account_service.py
+│   │   ├── loan_service.py      # Loan CRUD, family-scoped
+│   │   ├── question_engine.py   # A/B/C + ask_amount question bank
 │   │   ├── conversation_memory.py
 │   │   ├── report_service.py
-│   │   ├── excel_export.py
+│   │   ├── excel_export.py      # adds Loans sheet
 │   │   ├── scheduler_service.py
 │   │   ├── auto_bug_checker.py  # @safe decorator + log_bug
 │   │   ├── self_healing_service.py
@@ -331,6 +376,8 @@ Multi-tenant isolation + JWT login is on:
 | `whatsapp_enrollments` | WhatsApp number → family mapping, globally unique |
 | `financial_records.family_id` | Each record belongs to a family |
 | `conversations.family_id` | Conversation state isolated by family too |
+| `bank_accounts` / `account_balances` | Per-family ledger and balance snapshots |
+| `loans.family_id` | Loans / installment plans, family-scoped |
 
 **First-time setup:**
 
