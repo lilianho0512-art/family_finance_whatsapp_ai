@@ -11,7 +11,8 @@ Production-ready WhatsApp AI assistant for family finances:
 - Auto A/B/C/D follow-up questions, remembering which record each user is currently filling
 - Auto-classifies: expense, savings, income, transfer
 - In-WhatsApp queries: this month's expenses / savings / income / savings rate / category / merchant
-- Bootstrap Dashboard / Records / Accounts / **Loans** / **Reminders** / Reports
+- Bootstrap Dashboard / Records / Accounts / **Loans** / **Reminders** / Reports / **Settings**
+- **Multi-currency** — 12 currencies (MYR, SGD, USD, EUR, GBP, JPY, AUD, IDR, THB, PHP, HKD, CNY) with family default + per-record/loan/bill override
 - **Loans & payment plans** — track loans and BNPL/installment plans with monthly payment + balance
 - **Payment reminders** — auto-fires day-before + day-of reminders for active loans and recurring bills, sent to every enrolled WhatsApp/Telegram number
 - Excel monthly export (Summary / Expenses / Savings / Income / Category / Cashflow / Need Review / **Loans**)
@@ -202,6 +203,7 @@ Open in the browser after startup:
 | Loans / payment plans | http://localhost:8000/loans |
 | Reminders | http://localhost:8000/reminders |
 | Reports | http://localhost:8000/reports |
+| Settings (family default currency) | http://localhost:8000/settings |
 | Excel monthly report | http://localhost:8000/export/monthly |
 | Health | http://localhost:8000/health |
 
@@ -273,6 +275,45 @@ Failures (no Telegram bot token, network error, etc.) keep the dedup
 row but flip its status to `failed` so the audit log surfaces them
 instead of silently retrying every 9am.
 
+### 4.3 Multi-currency (`/settings`)
+
+Records, loans, and recurring bills are stored in their **native
+currency** — no FX conversion. Each family has a default currency that
+new rows inherit, and individual rows can override.
+
+**Supported list (12):** `MYR`, `SGD`, `USD`, `EUR`, `GBP`, `JPY`,
+`AUD`, `IDR`, `THB`, `PHP`, `HKD`, `CNY`. Symbols rendered as
+`RM`, `S$`, `$`, `€`, `£`, `¥`, `A$`, `Rp`, `฿`, `₱`, `HK$`, `¥`.
+
+**Where it's set.** A new `/settings` page lets the family admin pick
+the default. Loan + recurring-expense forms have their own currency
+dropdown (defaults to family currency, overridable per row).
+
+**Bot flow.**
+- **Telegram (step-by-step):** the bot always asks `ask_currency`
+  after `ask_amount`. The 12-letter menu lists every supported code.
+- **WhatsApp (Meta / Green API):** parsers detect currency hints in
+  free text (`"USD 50"`, `"$50 lunch"`, `"S$25 hawker"`, `"RM88"`).
+  If no hint is found, the family default applies. The
+  `ask_currency` step is skipped because the record already has one.
+
+**Hint precedence.** Symbols match longest-first so
+`"S$50"` → SGD (not USD), `"HK$200"` → HKD (not USD).
+
+**Display.** A `money` Jinja filter turns `(amount, currency)` into a
+symbol-prefixed string everywhere — dashboard cards, loans table,
+reminders list, records, reports, monthly Excel sheets, and
+reminder messages.
+
+**Existing data.** The migration backfills old `Family.default_currency`,
+`Loan.currency`, and `RecurringExpense.currency` to `MYR` via
+`server_default`, so legacy rows keep rendering as RM.
+
+> Reports and totals do **not** convert across currencies. A family
+> with mixed-currency loans will see totals summed in the family's
+> default symbol — the breakdown column shows each row's own currency
+> so the discrepancy is visible.
+
 ---
 
 ## 5. Self-healing behaviors
@@ -310,6 +351,7 @@ family_finance_whatsapp_ai/
 │   │   ├── accounts.py
 │   │   ├── loans.py             # /loans CRUD
 │   │   ├── reminders.py         # /reminders CRUD + run-now
+│   │   ├── settings.py          # /settings — family default currency
 │   │   ├── reports.py
 │   │   ├── admin.py
 │   │   ├── auth.py
@@ -317,14 +359,14 @@ family_finance_whatsapp_ai/
 │   ├── services/
 │   │   ├── whatsapp_service.py  # send text + download media + retry
 │   │   ├── ai_parser.py         # Ollama → Gemini → rule (skipped on Telegram)
-│   │   ├── rule_parser.py
+│   │   ├── rule_parser.py       # extracts currency hints from free text
 │   │   ├── ocr_service.py
 │   │   ├── record_service.py
 │   │   ├── account_service.py
 │   │   ├── loan_service.py      # Loan CRUD, family-scoped
 │   │   ├── recurring_expense_service.py  # Recurring-bill CRUD
 │   │   ├── reminder_service.py  # compute_next_due, run_daily_reminders, dedup
-│   │   ├── question_engine.py   # A/B/C + ask_amount question bank
+│   │   ├── question_engine.py   # A/B/C + ask_amount + ask_currency question bank
 │   │   ├── conversation_memory.py
 │   │   ├── report_service.py
 │   │   ├── excel_export.py      # adds Loans sheet
@@ -332,13 +374,14 @@ family_finance_whatsapp_ai/
 │   │   ├── auto_bug_checker.py  # @safe decorator + log_bug
 │   │   ├── self_healing_service.py
 │   │   └── menu_service.py
-│   ├── templates/   (Jinja2 + Bootstrap)
+│   ├── templates/   (Jinja2 + Bootstrap, "money" filter installed per router)
 │   ├── static/
 │   └── utils/
 │       ├── logger.py
 │       ├── json_tools.py
 │       ├── date_tools.py
-│       └── money_tools.py
+│       ├── money_tools.py       # extract_amount; format_money proxies to currency
+│       └── currency.py          # SUPPORTED_CURRENCIES, format_money, parse_currency_hint
 ├── tests/test_smoke.py
 ├── uploads/  output/  logs/  data/
 ├── .env.example
@@ -417,7 +460,7 @@ Multi-tenant isolation + JWT login is on:
 
 | Table | Purpose |
 |---|---|
-| `families` | Family accounts |
+| `families` | Family accounts (with `default_currency`) |
 | `users` | Email + bcrypt password + `family_id` |
 | `whatsapp_enrollments` | WhatsApp number → family mapping, globally unique |
 | `financial_records.family_id` | Each record belongs to a family |
