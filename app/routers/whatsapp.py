@@ -330,6 +330,7 @@ def _handle_message(db: Session, msg: dict, provider: str = "meta"):
             field_map = {
                 "ask_record_type": "record_type",
                 "ask_amount": "amount",
+                "ask_currency": "currency",
                 "ask_category": "category",
                 "ask_payment_method": "payment_method",
                 "ask_savings_source": "account",  # legacy: now stored as account

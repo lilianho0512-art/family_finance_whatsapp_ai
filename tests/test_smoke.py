@@ -567,6 +567,43 @@ def test_recurring_service_currency_normalization():
     assert upd.currency == "MYR"
 
 
+def test_field_map_covers_every_question_step():
+    """Regression for the ask_currency loop bug: every step that
+    determine_next_question can return must have a field_map entry,
+    otherwise the answer is parsed but never persisted and the bot
+    re-asks the same question forever."""
+    import re as _re
+    from app.services import question_engine
+    from app.routers import whatsapp as wa
+
+    src = Path(wa.__file__).read_text(encoding="utf-8")
+    # Pull out the field_map literal from _handle_message.
+    m = _re.search(r"field_map\s*=\s*\{([^}]+)\}", src, _re.DOTALL)
+    assert m, "field_map dict not found in whatsapp.py"
+    keys = set(_re.findall(r"\"(ask_[a-z_]+)\"\s*:", m.group(1)))
+
+    # Every step yielded by determine_next_question must be a key.
+    expected = {
+        "ask_record_type", "ask_amount", "ask_currency",
+        "ask_category", "ask_payment_method",
+        "ask_income_source",
+        "ask_account_expense", "ask_account_savings", "ask_account_income",
+    }
+    missing = expected - keys
+    assert not missing, f"field_map missing entries for: {missing}"
+
+    # And every key must resolve via question_engine (no stale entries).
+    # ask_savings_source is a legacy alias kept for backward compat.
+    KNOWN_LEGACY = {"ask_savings_source"}
+    # Probe with the right answer shape per step: numeric for ask_amount,
+    # letter for everything else.
+    for k in keys - KNOWN_LEGACY:
+        probe = "100" if k == "ask_amount" else "A"
+        assert question_engine.resolve_answer(k, probe) is not None, (
+            f"field_map has step {k!r} but resolve_answer can't handle it"
+        )
+
+
 def test_reminder_message_uses_item_currency(monkeypatch):
     from datetime import date as _d
     from app.services import loan_service, reminder_service
